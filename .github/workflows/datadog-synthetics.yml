@@ -16,15 +16,20 @@ name: Run Datadog Synthetic tests
 on:
   push:
     branches: [ "main" ]
-  pull_request:
+  pull_request_target:
     branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Only run for same-repository PRs to prevent untrusted fork code from accessing secrets
+    if: ${{ github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # On pull_request_target, check out the PR's head commit; on push, use the pushed commit SHA
+        ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
 
     # Run Synthetic tests within your GitHub workflow.
     # For additional configuration options visit the action within the marketplace: https://github.com/marketplace/actions/datadog-synthetics-ci
@@ -33,6 +38,7 @@ jobs:
       with:
         api_key: ${{secrets.DD_API_KEY}}
         app_key: ${{secrets.DD_APP_KEY}}
-        test_search_query: 'tag:e2e-tests' #Modify this tag to suit your tagging strategy
+        test_search_query: 'tag:e2e-tests'
+        tunnel: false
 
 
