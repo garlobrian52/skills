@@ -16,12 +16,12 @@ name: Run Datadog Synthetic tests
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
@@ -43,4 +43,3 @@ jobs:
     - name: Datadog Synthetic tests skipped
       if: ${{ env.DD_API_KEY == '' || env.DD_APP_KEY == '' }}
       run: echo "Datadog Synthetic tests were skipped because DD_API_KEY or DD_APP_KEY secrets are not configured."
-
