@@ -27,7 +27,7 @@ jobs:
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     # Run Synthetic tests within your GitHub workflow.
     # For additional configuration options visit the action within the marketplace: https://github.com/marketplace/actions/datadog-synthetics-ci
