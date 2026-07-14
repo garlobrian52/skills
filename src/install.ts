@@ -17,6 +17,7 @@ import {
 import { targets, TARGET_NAMES } from "./targets/index.js"
 import { promptForApiKey } from "./key-setup.js"
 import { createEmitter } from "./events.js"
+import { posthog, runId } from "./posthog.js"
 
 interface ResultEntry {
   agent: string
@@ -235,6 +236,18 @@ export default defineCommand({
       target: targetName,
     })
 
+    posthog.capture({
+      distinctId: runId,
+      event: "plugin_install_started",
+      properties: {
+        mode: skillsOnly ? "skills-only" : "full",
+        method,
+        plugin_version: pluginVersion,
+        target: targetName,
+        targets_count: selectedTargets.length,
+      },
+    })
+
     if (method === "symlink" && cloned) {
       const msg = "Symlink requires a local plugin source. Use --method paste or clone the repo first."
       if (jsonMode) {
@@ -396,11 +409,43 @@ export default defineCommand({
         message: `${failed.length} target(s) failed`,
         retryable: true,
       })
+      posthog.capture({
+        distinctId: runId,
+        event: "plugin_install_failed",
+        properties: {
+          targets_total: results.length,
+          targets_failed: failed.length,
+          targets_succeeded: succeeded.length,
+          failed_targets: failed.map((r) => r.agent),
+          failed_reasons: failed.map((r) => r.reason),
+          plugin_version: pluginVersion,
+        },
+      })
       process.exitCode = 1
-      if (jsonMode) return
+      if (jsonMode) {
+        await posthog.shutdown()
+        return
+      }
     } else {
       emit({ type: "install_completed", ok: true })
-      if (jsonMode) return
+      posthog.capture({
+        distinctId: runId,
+        event: "plugin_install_completed",
+        properties: {
+          targets_total: results.length,
+          targets_succeeded: succeeded.length,
+          skills_total: results.reduce((s, r) => s + r.skills, 0),
+          commands_total: results.reduce((s, r) => s + r.commands, 0),
+          mcp_servers_total: results.reduce((s, r) => s + r.mcpServers, 0),
+          plugin_version: pluginVersion,
+          mode: skillsOnly ? "skills-only" : "full",
+          method,
+        },
+      })
+      if (jsonMode) {
+        await posthog.shutdown()
+        return
+      }
     }
 
     if (failed.length === 0) {
@@ -421,5 +466,7 @@ export default defineCommand({
         console.log("  2. Restart your editor")
       }
     }
+
+    await posthog.shutdown()
   },
 })
