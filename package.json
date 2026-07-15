@@ -19,12 +19,12 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run build && POSTHOG_API_KEY= node --test test/*.test.mjs"
   },
   "dependencies": {
     "citty": "^0.1.6",
     "js-yaml": "^4.1.0",
-    "posthog-node": "^5.41.0"
+    "posthog-js": "^1.400.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

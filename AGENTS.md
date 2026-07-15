@@ -12,4 +12,4 @@ Non-obvious notes:
 - Full (non-`--skills-only`) installs need a `CUBIC_API_KEY` (`cbk_*`). Interactive TTY prompting won't work in the cloud VM ("No TTY detected"); use `--json` mode which reads `CUBIC_API_KEY` from the env non-interactively (any `cbk_...` string works for a local dry run — the key is only inlined into the generated MCP config, not validated).
 - During a full install the CLI temporarily rewrites the repo's `.mcp.json` to inline the key and restores it in a `finally` block; if a run is killed mid-install, check `git status` and restore `.mcp.json`.
 - `node scripts/validate-template.mjs` validates the plugin template/marketplace files (the "no hooks/hooks.json" line is an expected warning, not a failure).
-- `posthog-node` prints an `EBADENGINE` warning on the VM's default Node (v22.14.0); it is harmless and install/build/test all succeed.
+- Tests set `POSTHOG_API_KEY=` so the suite does not send telemetry. The CLI uses `posthog-js` (lazy init in `src/posthog.ts`); set `POSTHOG_API_KEY=""` to disable telemetry locally.
