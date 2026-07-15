@@ -123,7 +123,13 @@ Telemetry uses a bundled public PostHog project key and the US PostHog endpoint 
 POSTHOG_API_KEY= npx @cubic-plugin/cubic-plugin install
 ```
 
-Set the empty value in your environment to opt out persistently. Developers can instead set `POSTHOG_API_KEY` to another project key and optionally set `POSTHOG_HOST` to another endpoint. `npm test` disables telemetry automatically.
+To opt out persistently, add an exported empty value to your shell profile so child processes such as `npx` inherit it:
+
+```bash
+export POSTHOG_API_KEY=
+```
+
+Developers can instead set `POSTHOG_API_KEY` to another project key and optionally set `POSTHOG_HOST` to another endpoint. `npm test` disables telemetry automatically.
 
 > **Note:** `POSTHOG_API_KEY` is an analytics ingestion key. It is separate from the secret `CUBIC_API_KEY` (`cbk_*`) used to authenticate the cubic MCP connection.
 
