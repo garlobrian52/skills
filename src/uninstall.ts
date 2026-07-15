@@ -1,7 +1,7 @@
 import { defineCommand } from "citty"
 import path from "path"
 import { targets, TARGET_NAMES } from "./targets/index.js"
-import { posthog, runId } from "./posthog.js"
+import { posthog, shutdownPosthogAndExit } from "./posthog.js"
 
 export default defineCommand({
   meta: {
@@ -43,17 +43,13 @@ export default defineCommand({
       await target.uninstall(outputRoot)
     }
 
-    posthog.capture({
-      distinctId: runId,
-      event: "plugin_uninstalled",
-      properties: {
-        target: targetName,
-        targets_count: selectedTargets.length,
-      },
+    posthog.capture("plugin_uninstalled", {
+      target: targetName,
+      targets_count: selectedTargets.length,
     })
 
     console.log("\nRestart your editor to apply changes.")
 
-    await posthog.shutdown()
+    await shutdownPosthogAndExit()
   },
 })
