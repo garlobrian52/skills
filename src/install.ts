@@ -5,8 +5,8 @@ import {
   pathExists,
   inlineApiKey,
   resolvePluginRoot,
-  installReviewSkill,
-  installReviewCommand,
+  installSkills,
+  installCommands,
   TARGET_LAYOUTS,
   readPluginVersion,
   writeManifest,
@@ -41,6 +41,7 @@ function formatTargetLine(name: string, r: ResultEntry): string {
 async function buildManifestEntries(
   pluginRoot: string,
   targetName: string,
+  outputRoot: string,
   skillsOnly: boolean,
   method: InstallMethod,
 ): Promise<ManifestEntry[]> {
@@ -54,12 +55,13 @@ async function buildManifestEntries(
     for (const d of dirs) {
       if (!d.isDirectory()) continue
       if (await pathExists(path.join(skillsSource, d.name, "SKILL.md"))) {
-        // For skills-only mode, only run-review is installed
-        if (skillsOnly && d.name !== "run-review") continue
         entries.push({
           name: d.name,
           type: "skill",
-          file: path.join("skills", d.name, "SKILL.md"),
+          file: path.relative(
+            outputRoot,
+            path.join(layout.skillsDir(outputRoot), d.name, "SKILL.md"),
+          ),
           method,
         })
       }
@@ -72,15 +74,16 @@ async function buildManifestEntries(
     const files = await fs.readdir(cmdsSource)
     for (const file of files) {
       if (!file.endsWith(".md")) continue
-      // For skills-only mode, only run-review command is installed
-      if (skillsOnly && !file.includes("run-review")) continue
-      const outName = layout ? layout.commandFilename(file) : file
+      const outName = layout.commandFilename(file)
       // Commands with format transforms (stripped/toml) are always copied, not symlinked
-      const cmdMethod = layout && layout.commandFormat !== "original" ? "paste" as InstallMethod : method
+      const cmdMethod = layout.commandFormat !== "original" ? "paste" as InstallMethod : method
       entries.push({
         name: file.replace(/\.md$/, ""),
-        type: "command",
-        file: outName,
+        type: layout.commandType,
+        file: path.relative(
+          outputRoot,
+          path.join(layout.commandDir(outputRoot), outName),
+        ),
         method: cmdMethod,
       })
     }
@@ -306,24 +309,28 @@ export default defineCommand({
                 `No skills-only layout defined for target: ${name}. Add an entry to TARGET_LAYOUTS.`,
               )
             }
-            const skillInstalled = await installReviewSkill(
+            const skills = await installSkills(
               pluginRoot,
               layout.skillsDir(outputRoot),
               method,
             )
-            const commandInstalled = await installReviewCommand(
+            const installedCommands = await installCommands(
               pluginRoot,
               layout.commandDir(outputRoot),
               layout,
               method,
             )
-            const skills = skillInstalled ? 1 : 0
-            const commands = commandInstalled ? 1 : 0
+            const commands = layout.commandType === "command"
+              ? installedCommands
+              : 0
+            const prompts = layout.commandType === "prompt"
+              ? installedCommands
+              : 0
             entry = {
               agent: name,
               skills,
               commands,
-              prompts: 0,
+              prompts,
               mcpServers: 0,
               status: "ok",
               reason: null,
@@ -342,7 +349,13 @@ export default defineCommand({
 
           // Write manifest for this target
           if (entry.status === "ok") {
-            const manifestEntries = await buildManifestEntries(pluginRoot, name, skillsOnly, method)
+            const manifestEntries = await buildManifestEntries(
+              pluginRoot,
+              name,
+              outputRoot,
+              skillsOnly,
+              method,
+            )
             const manifest: CubicManifest = {
               manifestVersion: 1,
               pluginVersion,
@@ -357,7 +370,7 @@ export default defineCommand({
 
           if (!jsonMode) {
             if (skillsOnly) {
-              console.log(`  ${name}: ${entry.skills} skill, ${entry.commands} command (skills only)`)
+              console.log(`${formatTargetLine(name, entry)} (skills only)`)
             } else {
               console.log(formatTargetLine(name, entry))
             }
