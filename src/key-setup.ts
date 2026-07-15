@@ -2,7 +2,7 @@ import readline from "readline"
 import { spawn } from "child_process"
 import os from "os"
 import type { Emitter } from "./events.js"
-import { posthog, runId } from "./posthog.js"
+import { posthog } from "./posthog.js"
 
 const CUBIC_URL =
   "https://www.cubic.dev/settings?tab=integrations&integration=mcp"
@@ -67,7 +67,7 @@ export async function promptForApiKey(
 
     if (hasValidEnvKey) {
       emit({ type: "auth_success", source: "env" })
-      posthog.capture({ distinctId: runId, event: "auth_succeeded", properties: { source: "env" } })
+      posthog.capture("auth_succeeded", { source: "env" })
       return existing
     }
 
@@ -93,7 +93,7 @@ export async function promptForApiKey(
       `  API key found in environment (${maskKey(existing)}). Use it? [Y/n] `,
     )
     if (answer.toLowerCase() !== "n") {
-      posthog.capture({ distinctId: runId, event: "auth_succeeded", properties: { source: "env" } })
+      posthog.capture("auth_succeeded", { source: "env" })
       return existing
     }
   }
@@ -116,6 +116,6 @@ export async function promptForApiKey(
     )
   }
 
-  posthog.capture({ distinctId: runId, event: "auth_succeeded", properties: { source: "prompt" } })
+  posthog.capture("auth_succeeded", { source: "prompt" })
   return key
 }
