@@ -25,7 +25,6 @@ function ensureInit(): void {
     advanced_disable_flags: true,
     autocapture: false,
     capture_pageview: false,
-    disable_session_recording: true,
   })
   posthogClient.identify(runId)
   initialized = true
