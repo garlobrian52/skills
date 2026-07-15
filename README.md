@@ -117,13 +117,21 @@ The CLI sends operational telemetry to PostHog to help maintain the installer. I
 
 Events cover install start, authentication success, install completion or failure, and uninstall. Properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
 
-Telemetry uses a bundled public PostHog project key and the US PostHog endpoint by default. Disable it for a command by setting `POSTHOG_API_KEY` to an empty value:
+`POSTHOG_API_KEY` has three distinct configurations:
+
+| Value | Behavior |
+| --- | --- |
+| Unset | Telemetry is enabled with the bundled public project key. |
+| Empty | Telemetry is disabled and no events are sent. |
+| Non-empty | Telemetry is enabled with the supplied PostHog project key. |
+
+When telemetry is enabled, events use the US PostHog endpoint by default; `POSTHOG_HOST` overrides the endpoint. Disable telemetry for one command with:
 
 ```bash
 POSTHOG_API_KEY= npx @cubic-plugin/cubic-plugin install
 ```
 
-Set the empty value in your environment to opt out persistently. Developers can instead set `POSTHOG_API_KEY` to another project key and optionally set `POSTHOG_HOST` to another endpoint. `npm test` disables telemetry automatically.
+Set the empty value in your environment to opt out persistently. The test script does this automatically so local and CI test runs do not send telemetry.
 
 > **Note:** `POSTHOG_API_KEY` is an analytics ingestion key. It is separate from the secret `CUBIC_API_KEY` (`cbk_*`) used to authenticate the cubic MCP connection.
 
