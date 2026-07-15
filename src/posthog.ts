@@ -8,9 +8,13 @@ const POSTHOG_PROJECT_API_KEY =
   "phc_sUjxrcTH7saY1BYLPKfgwVmSDNr1F2L0qZmtIdsnyEz"
 
 // Override with POSTHOG_API_KEY; set POSTHOG_API_KEY="" to disable telemetry.
+// Standard opt-out env vars DO_NOT_TRACK=1 and NO_TELEMETRY=1 also disable telemetry.
 const apiKey = process.env.POSTHOG_API_KEY ?? POSTHOG_PROJECT_API_KEY
 
-export const telemetryEnabled = apiKey.length > 0
+export const telemetryEnabled =
+  apiKey.length > 0 &&
+  process.env.DO_NOT_TRACK !== "1" &&
+  process.env.NO_TELEMETRY !== "1"
 
 let initialized = false
 

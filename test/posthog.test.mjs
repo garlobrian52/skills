@@ -13,7 +13,7 @@ const POSTHOG_MODULE = path.join(__dirname, "..", "dist", "posthog.js")
 const DEFAULT_API_KEY =
   "phc_sUjxrcTH7saY1BYLPKfgwVmSDNr1F2L0qZmtIdsnyEz"
 
-async function captureApiKeys(apiKey) {
+async function captureApiKeys(apiKey, extraEnv = {}) {
   const payloads = []
   const server = http.createServer((request, response) => {
     const chunks = []
@@ -39,6 +39,7 @@ async function captureApiKeys(apiKey) {
     const env = {
       ...process.env,
       POSTHOG_HOST: `http://127.0.0.1:${address.port}`,
+      ...extraEnv,
     }
     if (apiKey === undefined) {
       delete env.POSTHOG_API_KEY
@@ -82,6 +83,16 @@ describe("PostHog API key configuration", () => {
 
   it("disables telemetry when POSTHOG_API_KEY is empty", async () => {
     const apiKeys = await captureApiKeys("")
+    assert.deepEqual(apiKeys, [])
+  })
+
+  it("disables telemetry when DO_NOT_TRACK=1", async () => {
+    const apiKeys = await captureApiKeys(undefined, { DO_NOT_TRACK: "1" })
+    assert.deepEqual(apiKeys, [])
+  })
+
+  it("disables telemetry when NO_TELEMETRY=1", async () => {
+    const apiKeys = await captureApiKeys(undefined, { NO_TELEMETRY: "1" })
     assert.deepEqual(apiKeys, [])
   })
 })
