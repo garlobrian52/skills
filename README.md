@@ -111,6 +111,22 @@ If `CUBIC_API_KEY` is missing, JSON mode returns a structured `install_failed` e
 
 > **Tip:** In Claude Code, you can also just say "set up my cubic key" and paste your key — the installer will detect your OS and shell and save it automatically.
 
+## Usage telemetry
+
+The CLI sends operational telemetry to PostHog by default to help maintain the installer. It generates a new random identifier for each CLI process and keeps PostHog state in memory, so it does not persist a user or account identity.
+
+Events cover install start, authentication success, install completion or failure, and uninstall. Properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
+
+Telemetry uses a bundled public PostHog project key and the US PostHog endpoint when `POSTHOG_API_KEY` is unset. Disable it for a command by setting `POSTHOG_API_KEY` to an empty value:
+
+```bash
+POSTHOG_API_KEY= npx @cubic-plugin/cubic-plugin install
+```
+
+Set the empty value in your environment to opt out persistently. Developers can instead set `POSTHOG_API_KEY` to another project key and optionally set `POSTHOG_HOST` to another endpoint. `npm test` disables telemetry automatically.
+
+> **Note:** `POSTHOG_API_KEY` is an analytics ingestion key. It is separate from the secret `CUBIC_API_KEY` (`cbk_*`) used to authenticate the cubic MCP connection.
+
 ## Commands
 
 | Command                          | Description                                                            |
