@@ -53,7 +53,9 @@ async function captureApiKeys(apiKey) {
         "-e",
         `import { posthog } from ${JSON.stringify(POSTHOG_MODULE)};
 posthog.capture("posthog_configuration_test");
-setTimeout(() => process.exit(0), 250);`,
+await new Promise((resolve) => setTimeout(resolve, 3500));
+await posthog.shutdown();
+process.exit(0);`,
       ],
       { env },
     )
@@ -63,10 +65,20 @@ setTimeout(() => process.exit(0), 250);`,
     )
   }
 
-  return payloads
-    .flatMap((payload) => (Array.isArray(payload) ? payload : [payload]))
-    .map((event) => event.properties?.token)
-    .filter(Boolean)
+  return payloads.flatMap((payload) => {
+    if (Array.isArray(payload)) {
+      return payload.map((event) => event.properties?.token).filter(Boolean)
+    }
+
+    if (Array.isArray(payload.batch)) {
+      return [
+        payload.api_key,
+        ...payload.batch.map((event) => event.properties?.token),
+      ].filter(Boolean)
+    }
+
+    return [payload.api_key, payload.properties?.token].filter(Boolean)
+  })
 }
 
 describe("PostHog API key configuration", () => {
