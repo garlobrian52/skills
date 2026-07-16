@@ -117,6 +117,8 @@ The CLI sends operational telemetry to PostHog to help maintain the installer. I
 
 Events cover install start, authentication success, install completion or failure, and uninstall. Properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
 
+Session replay follows the PostHog SDK default rather than being explicitly disabled. The SDK only starts replay when a browser `window` and server-side recording configuration are available; this Node.js CLI has no browser window, so CLI runs do not produce session recordings. Autocapture and pageview capture also remain disabled. Only the explicit operational events described above are sent.
+
 Telemetry uses a bundled public PostHog project key and the US PostHog endpoint by default. Disable it for a command by setting `POSTHOG_API_KEY` to an empty value:
 
 ```bash
