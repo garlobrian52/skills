@@ -40,9 +40,14 @@ npx @cubic-plugin/cubic-plugin install --to gemini
 
 # Universal (.agents/skills)
 npx @cubic-plugin/cubic-plugin install --to universal
+
+# Skills and companion commands only (no API key or MCP configuration)
+npx @cubic-plugin/cubic-plugin install --skills-only
 ```
 
 The installer will prompt you for your API key during setup.
+`--skills-only` installs all bundled skills and commands without prompting for
+an API key or changing MCP configuration.
 
 To uninstall, use the same `--to` flag:
 
