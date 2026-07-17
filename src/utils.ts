@@ -309,6 +309,7 @@ export interface TargetLayout {
   commandDir: (root: string) => string
   commandFormat: CommandFormat
   commandFilename: (source: string) => string
+  outputType: "command" | "prompt"
 }
 
 export const TARGET_LAYOUTS: Record<string, TargetLayout> = {
@@ -317,104 +318,101 @@ export const TARGET_LAYOUTS: Record<string, TargetLayout> = {
     commandDir: (root) => path.join(root, ".claude", "commands"),
     commandFormat: "original",
     commandFilename: (s) => s,
+    outputType: "command",
   },
   opencode: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
   cursor: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
   codex: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "prompts"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "prompt",
   },
   droid: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
   pi: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "prompts"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "prompt",
   },
   gemini: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "toml",
     commandFilename: (s) => `cubic-${s.replace(/\.md$/, ".toml")}`,
+    outputType: "command",
   },
   universal: {
     skillsDir: (root) => path.join(root, ".agents", "skills"),
     commandDir: (root) => path.join(root, ".agents", "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
 }
 
-
-export async function installReviewSkill(
-  pluginRoot: string,
-  skillsDir: string,
-  method: InstallMethod = "paste",
-): Promise<boolean> {
-  const source = path.join(pluginRoot, "skills", "run-review", "SKILL.md")
-  if (!(await pathExists(source))) return false
-  const targetDir = path.join(skillsDir, "run-review")
-  await fs.mkdir(targetDir, { recursive: true })
-  await installFile(source, path.join(targetDir, "SKILL.md"), method)
-  return true
-}
-
-export async function installReviewCommand(
+export async function installCommands(
   pluginRoot: string,
   commandDir: string,
   layout: TargetLayout,
   method: InstallMethod = "paste",
-): Promise<boolean> {
-  const source = path.join(pluginRoot, "commands", "run-review.md")
-  if (!(await pathExists(source))) return false
+): Promise<number> {
+  const sourceDir = path.join(pluginRoot, "commands")
+  if (!(await pathExists(sourceDir))) return 0
   await fs.mkdir(commandDir, { recursive: true })
 
-  const targetFilename = layout.commandFilename("run-review.md")
+  let count = 0
+  for (const file of await fs.readdir(sourceDir)) {
+    if (!file.endsWith(".md")) continue
 
-  if (layout.commandFormat === "original") {
-    await installFile(source, path.join(commandDir, targetFilename), method)
-    return true
+    const source = path.join(sourceDir, file)
+    const target = path.join(commandDir, layout.commandFilename(file))
+
+    if (layout.commandFormat === "original") {
+      await installFile(source, target, method)
+    } else {
+      const content = await fs.readFile(source, "utf-8")
+      const { data, body } = parseFrontmatter(content)
+
+      if (layout.commandFormat === "stripped") {
+        const stripped: Record<string, unknown> = {}
+        if (data.description) stripped.description = data.description
+        await fs.writeFile(target, formatFrontmatter(stripped, body))
+      } else {
+        const escaped = body.trim().replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"')
+        const toml = [
+          `description = ${JSON.stringify(String(data.description ?? ""))}`,
+          'prompt = """',
+          escaped,
+          '"""',
+          "",
+        ].join("\n")
+        await fs.writeFile(target, toml)
+      }
+    }
+    count++
   }
-
-  const content = await fs.readFile(source, "utf-8")
-  const { data, body } = parseFrontmatter(content)
-
-  if (layout.commandFormat === "stripped") {
-    const stripped: Record<string, unknown> = {}
-    if (data.description) stripped.description = data.description
-    await fs.writeFile(
-      path.join(commandDir, targetFilename),
-      formatFrontmatter(stripped, body),
-    )
-  } else {
-    const escaped = body.trim().replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"')
-    const toml = [
-      `description = ${JSON.stringify(String(data.description ?? ""))}`,
-      'prompt = """',
-      escaped,
-      '"""',
-      "",
-    ].join("\n")
-    await fs.writeFile(path.join(commandDir, targetFilename), toml)
-  }
-  return true
+  return count
 }
 
 // --- Manifest tracking ---
