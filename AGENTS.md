@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-This repo is the `@cubic-plugin/cubic-plugin` package: a Node.js/TypeScript CLI (built with `citty`) that installs the cubic AI code-review plugin (skills, slash commands, and MCP config) into AI coding tools (Claude Code, Cursor, OpenCode, Codex, Gemini, Droid, Pi, universal). It is a client-side CLI — there is **no server, database, or long-running service** to start. External services it talks to (cubic MCP at `https://www.cubic.dev/api/mcp`, PostHog telemetry) are hosted; PostHog uses a baked-in project API key (override with `POSTHOG_API_KEY` / `POSTHOG_HOST` if needed).
+This repo is the `@cubic-plugin/cubic-plugin` package: a Node.js/TypeScript CLI (built with `citty`) that installs the cubic AI code-review plugin (skills, slash commands, and MCP config) into AI coding tools (Claude Code, Cursor, OpenCode, Codex, Gemini, Droid, Pi, universal). It is a client-side CLI — there is **no server, database, or long-running service** to start. External services it talks to (cubic MCP at `https://www.cubic.dev/api/mcp`, PostHog telemetry) are hosted; telemetry uses `posthog-js` with a baked-in project API key by default (`POSTHOG_API_KEY` overrides it, `POSTHOG_HOST` can redirect it, and setting `POSTHOG_API_KEY` to empty disables telemetry).
 
 Standard commands live in `package.json` scripts: `npm run build` (`tsc`, emits to gitignored `dist/`) and `npm test` (builds, then runs `node --test test/*.test.mjs`). There is no linter configured.
 
@@ -12,4 +12,4 @@ Non-obvious notes:
 - Full (non-`--skills-only`) installs need a `CUBIC_API_KEY` (`cbk_*`). Interactive TTY prompting won't work in the cloud VM ("No TTY detected"); use `--json` mode which reads `CUBIC_API_KEY` from the env non-interactively (any `cbk_...` string works for a local dry run — the key is only inlined into the generated MCP config, not validated).
 - During a full install the CLI temporarily rewrites the repo's `.mcp.json` to inline the key and restores it in a `finally` block; if a run is killed mid-install, check `git status` and restore `.mcp.json`.
 - `node scripts/validate-template.mjs` validates the plugin template/marketplace files (the "no hooks/hooks.json" line is an expected warning, not a failure).
-- `posthog-node` prints an `EBADENGINE` warning on the VM's default Node (v22.14.0); it is harmless and install/build/test all succeed.
+- The CLI uses `posthog-js` (lazy init in `src/posthog.ts`). When `POSTHOG_API_KEY` is unset it uses the baked-in public project key; a non-empty value overrides that key, and an empty value disables telemetry. The test script sets `POSTHOG_API_KEY=` to prevent telemetry from reaching PostHog.
