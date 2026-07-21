@@ -42,7 +42,49 @@ npx @cubic-plugin/cubic-plugin install --to gemini
 npx @cubic-plugin/cubic-plugin install --to universal
 ```
 
-The installer will prompt you for your API key during setup.
+The full installer will prompt you for your API key during setup.
+
+### Skills-only install
+
+Use `--skills-only` to install the complete local bundle without configuring
+the cubic MCP server or providing an API key:
+
+```bash
+npx @cubic-plugin/cubic-plugin install --to cursor --skills-only
+```
+
+Each selected target receives the five skills and five commands listed below.
+Codex and Pi expose the command files as prompts instead. With the default
+`--to all`, this installs 40 skills, 30 commands, and 10 prompts.
+
+| Target | Default root | Skills | Commands or prompts | Format |
+| ------ | ------------ | ------ | ------------------- | ------ |
+| Claude Code | current directory | `.claude/skills/` | `.claude/commands/*.md` | Original Markdown |
+| Cursor | `.cursor/` | `skills/` | `commands/cubic-*.md` | Markdown with description-only frontmatter |
+| OpenCode | `~/.config/opencode/` | `skills/` | `commands/cubic-*.md` | Markdown with description-only frontmatter |
+| Codex | `~/.codex/` | `skills/` | `prompts/cubic-*.md` | Markdown with description-only frontmatter |
+| Factory Droid | `~/.factory/` | `skills/` | `commands/cubic-*.md` | Markdown with description-only frontmatter |
+| Pi | `~/.pi/agent/` | `skills/` | `prompts/cubic-*.md` | Markdown with description-only frontmatter |
+| Gemini CLI | `.gemini/` | `skills/` | `commands/cubic-*.toml` | TOML |
+| Universal | current directory | `.agents/skills/` | `.agents/commands/cubic-*.md` | Markdown with description-only frontmatter |
+
+The installer writes `.cubic-manifest.json` in each target root. In
+skills-only mode it records the ten installed files and contains no MCP entry.
+Useful options:
+
+- `--output <dir>` writes each target under `<dir>/<target>/` instead of its
+  default root.
+- `--json` emits newline-delimited JSON and does not require
+  `CUBIC_API_KEY` when combined with `--skills-only`.
+- `--method symlink` links skill files (and Claude command files) to the local
+  plugin source. Commands that require a format conversion are copied and
+  recorded as `paste` in the manifest. If no local source is available, use
+  the default `--method paste`.
+
+> **MCP limitation:** Skills-only mode does not install MCP configuration.
+> Workflows that call cubic MCP tools, including `wiki`, `scan`, and
+> `learnings`, require a full install. The `run-review` workflow uses the
+> separately installed cubic CLI.
 
 To uninstall, use the same `--to` flag:
 
@@ -50,11 +92,14 @@ To uninstall, use the same `--to` flag:
 npx @cubic-plugin/cubic-plugin uninstall --to opencode
 ```
 
+Uninstall also removes the cubic MCP configuration from a full install. The
+`.cubic-manifest.json` metadata file is retained and can be deleted manually.
+
 ## Prerequisites
 
 - [Claude Code](https://code.claude.com) v1.0.33+
 - A [cubic](https://www.cubic.dev) account with an active installation
-- A cubic API key (`cbk_*`)
+- A cubic API key (`cbk_*`) for a full CLI install (not `--skills-only`)
 - (Optional) [cubic CLI](https://cubic.dev/install) for `/cubic:run-review`
 
 ## Installation
