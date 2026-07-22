@@ -73,5 +73,8 @@ export const DEFAULT_APPLICATION_FEE_AMOUNT = 123
 /** Default one-time checkout amount for a "Cookie" line item (minor units). */
 export const DEFAULT_CHECKOUT_UNIT_AMOUNT = 100_000
 
+/** Default PaymentIntent amount (minor units) — $20.00 when currency is usd. */
+export const DEFAULT_PAYMENT_INTENT_AMOUNT = 2000
+
 /** Default monthly platform subscription fee (minor units). */
 export const DEFAULT_SUBSCRIPTION_UNIT_AMOUNT = 1000

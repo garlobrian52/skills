@@ -129,9 +129,9 @@ Set the empty value in your environment to opt out persistently. Developers can 
 
 ## Stripe payments (Accounts v2)
 
-The CLI also includes a `payments` command group for Connect Accounts v2: onboard sellers, accept direct-charge Checkout payments with an application fee, and bill platform subscription fees from a connected account’s Stripe balance.
+The CLI also includes a `payments` command group for Connect Accounts v2: onboard sellers, create PaymentIntents (or Checkout) with an application fee, and bill platform subscription fees from a connected account’s Stripe balance.
 
-Copy `.env.example` and set keys from the [Stripe Dashboard](https://dashboard.stripe.com/apikeys):
+Copy `.env.example` and set keys from the [Stripe Dashboard](https://dashboard.stripe.com/apikeys) (never hard-code secret keys — see [keys best practices](https://docs.stripe.com/keys-best-practices)):
 
 ```bash
 cp .env.example .env
@@ -145,13 +145,18 @@ Typical flow:
 # 1) Create connected account + onboarding link
 node dist/index.js payments onboard --json
 
-# 2) After KYC, create a Checkout Session on the connected account
+# 2) After KYC, create a PaymentIntent (default $20.00 / automatic payment methods)
+node dist/index.js payments create-payment-intent --json
+# Or as a direct charge on a connected account:
+node dist/index.js payments create-payment-intent --seller <seller_id> --json
+
+# Alternative: Checkout Session on the connected account
 node dist/index.js payments create-checkout-session --seller <seller_id>
 
 # 3) Charge platform subscription from the seller's Stripe balance
 node dist/index.js payments charge-platform-subscription --seller <seller_id>
 
-# Optional: local webhook listener for capability / checkout / invoice events
+# Optional: local webhook listener for capability / checkout / PaymentIntent / invoice events
 node dist/index.js payments listen-webhooks --port 4242
 ```
 

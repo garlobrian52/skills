@@ -12,6 +12,11 @@ export interface SellerRecord {
   onboardingStatus: "pending" | "complete"
   checkoutSessionId?: string
   checkoutUrl?: string
+  /** Latest PaymentIntent created for this seller (pi_...) */
+  paymentIntentId?: string
+  paymentIntentStatus?: string
+  /** client_secret for confirming the PaymentIntent on the client */
+  paymentIntentClientSecret?: string
   /** Default payment method for platform subscription fees (pm_...) */
   paymentMethodId?: string
   setupIntentId?: string
@@ -59,6 +64,18 @@ export interface CreateCheckoutSessionInput {
   currency?: string
   applicationFeeAmount?: number
   quantity?: number
+}
+
+export interface CreatePaymentIntentInput {
+  /** Amount in minor units (default 2000). */
+  amount?: number
+  currency?: string
+  /**
+   * Optional local seller ID. When set, creates a direct-charge PaymentIntent
+   * on the connected account with an application fee.
+   */
+  sellerId?: string
+  applicationFeeAmount?: number
 }
 
 export interface CreateSubscriptionProductInput {

@@ -2,6 +2,7 @@ import { defineCommand } from "citty"
 import { createAccount } from "./payments/create-account.js"
 import { createAccountLink } from "./payments/create-account-link.js"
 import { createCheckoutSession } from "./payments/create-checkout-session.js"
+import { createPaymentIntent } from "./payments/create-payment-intent.js"
 import { createSubscriptionProduct } from "./payments/create-subscription-product.js"
 import { attachBalancePaymentMethod } from "./payments/attach-balance-payment-method.js"
 import { createSubscription } from "./payments/create-subscription.js"
@@ -136,6 +137,65 @@ const createCheckoutSessionCmd = defineCommand({
     }
     console.log(`Checkout session ${session.id} for seller ${seller.id}`)
     console.log(`  url: ${session.url}`)
+  },
+})
+
+const createPaymentIntentCmd = defineCommand({
+  meta: {
+    name: "create-payment-intent",
+    description:
+      "Create a PaymentIntent with automatic_payment_methods (optionally on a connected account)",
+  },
+  args: {
+    amount: {
+      type: "string",
+      description: "Amount in minor units (default 2000)",
+    },
+    currency: {
+      type: "string",
+      description: "Currency (default STRIPE_CURRENCY/usd)",
+    },
+    seller: {
+      type: "string",
+      description:
+        "Optional local seller ID — creates a direct charge with application fee",
+    },
+    applicationFeeAmount: {
+      type: "string",
+      description: "Application fee in minor units (default 123; seller required)",
+    },
+    json: { type: "boolean", default: false, description: "Print JSON" },
+  },
+  async run({ args }) {
+    const { paymentIntent, seller, clientSecret } = await createPaymentIntent({
+      amount: args.amount ? Number(args.amount) : undefined,
+      currency: args.currency,
+      sellerId: args.seller,
+      applicationFeeAmount: args.applicationFeeAmount
+        ? Number(args.applicationFeeAmount)
+        : undefined,
+    })
+    if (args.json) {
+      printJson({
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        clientSecret,
+        publishableKey: getStripePublishableKey() ?? null,
+        seller: seller ?? null,
+      })
+      return
+    }
+    console.log(`PaymentIntent ${paymentIntent.id}`)
+    console.log(`  status: ${paymentIntent.status}`)
+    console.log(`  amount: ${paymentIntent.amount} ${paymentIntent.currency}`)
+    if (clientSecret) {
+      console.log(`  clientSecret: ${clientSecret}`)
+    }
+    if (seller) {
+      console.log(`  seller: ${seller.id} (${seller.stripeAccountId})`)
+    }
   },
 })
 
@@ -355,7 +415,7 @@ const listenWebhooksCmd = defineCommand({
   meta: {
     name: "listen-webhooks",
     description:
-      "Start a local webhook listener for account, checkout, and invoice events",
+      "Start a local webhook listener for account, checkout, PaymentIntent, and invoice events",
   },
   args: {
     port: {
@@ -388,13 +448,14 @@ export default defineCommand({
   meta: {
     name: "payments",
     description:
-      "Stripe Accounts v2: onboard sellers, accept embedded payments, charge platform subscriptions",
+      "Stripe Accounts v2: onboard sellers, accept PaymentIntents/Checkout, charge platform subscriptions",
   },
   subCommands: {
     "create-account": createAccountCmd,
     "create-account-link": createAccountLinkCmd,
     onboard: onboardCmd,
     "create-checkout-session": createCheckoutSessionCmd,
+    "create-payment-intent": createPaymentIntentCmd,
     "create-subscription-product": createSubscriptionProductCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,
