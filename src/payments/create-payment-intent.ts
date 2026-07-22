@@ -1,24 +1,20 @@
 import type Stripe from "stripe"
 import { getStripeClient } from "./client.js"
-import {
-  DEFAULT_APPLICATION_FEE_AMOUNT,
-  DEFAULT_PAYMENT_INTENT_AMOUNT,
-  getCurrency,
-} from "./config.js"
+import { DEFAULT_PAYMENT_INTENT_AMOUNT, getCurrency } from "./config.js"
 import { PaymentsStore } from "./store.js"
-import type { CreatePaymentIntentInput, SellerRecord } from "./types.js"
+import type { CreatePaymentIntentInput, PaymentRecord } from "./types.js"
 
 export interface CreatePaymentIntentResult {
-  seller: SellerRecord
+  payment: PaymentRecord
   paymentIntent: Stripe.PaymentIntent
 }
 
 /**
- * Create a PaymentIntent on the connected account (direct charge)
- * with automatic payment methods enabled.
+ * Create a platform PaymentIntent with automatic payment methods enabled.
+ * Returns client_secret for initializing PaymentElement on the client.
  */
 export async function createPaymentIntent(
-  input: CreatePaymentIntentInput,
+  input: CreatePaymentIntentInput = {},
   deps: {
     stripe?: Stripe
     store?: PaymentsStore
@@ -27,34 +23,23 @@ export async function createPaymentIntent(
   const stripe = deps.stripe ?? getStripeClient()
   const store = deps.store ?? new PaymentsStore()
 
-  const seller = await store.getSeller(input.sellerId)
-  if (!seller) {
-    throw new Error(`Seller not found: ${input.sellerId}`)
-  }
-
   const currency = (input.currency?.trim() || getCurrency()).toLowerCase()
   const amount = input.amount ?? DEFAULT_PAYMENT_INTENT_AMOUNT
-  const applicationFeeAmount =
-    input.applicationFeeAmount ?? DEFAULT_APPLICATION_FEE_AMOUNT
 
-  const paymentIntent = await stripe.paymentIntents.create(
-    {
-      amount,
-      currency,
-      automatic_payment_methods: {
-        enabled: true,
-      },
-      application_fee_amount: applicationFeeAmount,
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount,
+    currency,
+    automatic_payment_methods: {
+      enabled: true,
     },
-    {
-      stripeAccount: seller.stripeAccountId,
-    },
-  )
-
-  const updated = await store.updateSeller(seller.id, {
-    paymentIntentId: paymentIntent.id,
-    lastPaymentIntentStatus: paymentIntent.status,
   })
 
-  return { seller: updated, paymentIntent }
+  const payment = await store.createPayment({
+    paymentIntentId: paymentIntent.id,
+    amount,
+    currency,
+    status: paymentIntent.status,
+  })
+
+  return { payment, paymentIntent }
 }

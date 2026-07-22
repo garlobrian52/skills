@@ -34,9 +34,20 @@ export interface PlatformCatalog {
   updatedAt?: string
 }
 
+export interface PaymentRecord {
+  id: string
+  paymentIntentId: string
+  amount: number
+  currency: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PaymentsStoreData {
   sellers: Record<string, SellerRecord>
   catalog: PlatformCatalog
+  payments: Record<string, PaymentRecord>
 }
 
 export interface CreateAccountInput {
@@ -64,10 +75,8 @@ export interface CreateCheckoutSessionInput {
 }
 
 export interface CreatePaymentIntentInput {
-  sellerId: string
   amount?: number
   currency?: string
-  applicationFeeAmount?: number
 }
 
 export interface CreateSubscriptionProductInput {
