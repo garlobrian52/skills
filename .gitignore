@@ -16,3 +16,6 @@ bun.lock
 *.log
 tmp/
 temp/
+
+# Local Stripe resource ID store
+.cubic-stripe.json

@@ -2,6 +2,7 @@
 import { defineCommand, runMain } from "citty"
 import install from "./install.js"
 import uninstall from "./uninstall.js"
+import stripe from "./stripe-cmd.js"
 
 const main = defineCommand({
   meta: {
@@ -12,6 +13,7 @@ const main = defineCommand({
   subCommands: {
     install: () => install,
     uninstall: () => uninstall,
+    stripe: () => stripe,
   },
 })
 
