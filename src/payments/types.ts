@@ -14,8 +14,6 @@ export interface SellerRecord {
   checkoutUrl?: string
   /** Direct-charge PaymentIntent on the connected account (pi_...) */
   paymentIntentId?: string
-  /** Client secret for confirming the PaymentIntent with Stripe.js / Elements */
-  paymentIntentClientSecret?: string
   lastPaymentIntentStatus?: string
   /** Default payment method for platform subscription fees (pm_...) */
   paymentMethodId?: string
@@ -37,9 +35,20 @@ export interface PlatformCatalog {
   updatedAt?: string
 }
 
+export interface PaymentRecord {
+  id: string
+  paymentIntentId: string
+  amount: number
+  currency: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PaymentsStoreData {
   sellers: Record<string, SellerRecord>
   catalog: PlatformCatalog
+  payments: Record<string, PaymentRecord>
 }
 
 export interface CreateAccountInput {
@@ -67,7 +76,7 @@ export interface CreateCheckoutSessionInput {
 }
 
 export interface CreatePaymentIntentInput {
-  sellerId: string
+  sellerId?: string
   /** Amount in minor units (default 2000). */
   amount?: number
   currency?: string
