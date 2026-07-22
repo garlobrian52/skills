@@ -2,10 +2,12 @@ import { defineCommand } from "citty"
 import { createAccount } from "./payments/create-account.js"
 import { createAccountLink } from "./payments/create-account-link.js"
 import { createCheckoutSession } from "./payments/create-checkout-session.js"
+import { createPaymentIntent } from "./payments/create-payment-intent.js"
 import { createSubscriptionProduct } from "./payments/create-subscription-product.js"
 import { attachBalancePaymentMethod } from "./payments/attach-balance-payment-method.js"
 import { createSubscription } from "./payments/create-subscription.js"
 import { startWebhookServer } from "./payments/webhook-server.js"
+import { startPaymentServer } from "./payments/payment-server.js"
 import { PaymentsStore } from "./payments/store.js"
 import { getPaymentsStorePath, getStripePublishableKey } from "./payments/config.js"
 
@@ -136,6 +138,42 @@ const createCheckoutSessionCmd = defineCommand({
     }
     console.log(`Checkout session ${session.id} for seller ${seller.id}`)
     console.log(`  url: ${session.url}`)
+  },
+})
+
+const createPaymentIntentCmd = defineCommand({
+  meta: {
+    name: "create-payment-intent",
+    description:
+      "Create a platform PaymentIntent with automatic payment methods",
+  },
+  args: {
+    amount: {
+      type: "string",
+      description: "Amount in minor units (default 2000)",
+    },
+    currency: { type: "string", description: "Currency (default STRIPE_CURRENCY/usd)" },
+    json: { type: "boolean", default: false, description: "Print JSON" },
+  },
+  async run({ args }) {
+    const { payment, paymentIntent } = await createPaymentIntent({
+      amount: args.amount ? Number(args.amount) : undefined,
+      currency: args.currency,
+    })
+    if (args.json) {
+      printJson({
+        payment,
+        paymentIntentId: paymentIntent.id,
+        clientSecret: paymentIntent.client_secret,
+        status: paymentIntent.status,
+        publishableKey: getStripePublishableKey() ?? null,
+      })
+      return
+    }
+    console.log(`PaymentIntent ${paymentIntent.id}`)
+    console.log(`  payment: ${payment.id}`)
+    console.log(`  status: ${paymentIntent.status}`)
+    console.log(`  client_secret: ${paymentIntent.client_secret}`)
   },
 })
 
@@ -384,6 +422,46 @@ const listenWebhooksCmd = defineCommand({
   },
 })
 
+const servePaymentCmd = defineCommand({
+  meta: {
+    name: "serve-payment",
+    description:
+      "Start a local PaymentElement server (create PaymentIntent, mount form, handle webhooks)",
+  },
+  args: {
+    port: {
+      type: "string",
+      default: "4242",
+      description: "HTTP port",
+    },
+    webhookPath: {
+      type: "string",
+      default: "/webhook",
+      description: "Webhook path",
+    },
+  },
+  async run({ args }) {
+    const port = Number(args.port)
+    const server = startPaymentServer({ port, webhookPath: args.webhookPath })
+    console.log(`Payment page: http://localhost:${port}/`)
+    console.log(
+      `Create PaymentIntent: POST http://localhost:${port}/create-payment-intent`,
+    )
+    console.log(
+      `Webhooks: POST http://localhost:${port}${args.webhookPath}`,
+    )
+    console.log(
+      "Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY from the Stripe Dashboard (Developers → API keys).",
+    )
+    console.log(
+      "Set STRIPE_WEBHOOK_SECRET from the Stripe Dashboard (Developers → Webhooks).",
+    )
+    await new Promise<void>((resolve) => {
+      server.on("close", () => resolve())
+    })
+  },
+})
+
 export default defineCommand({
   meta: {
     name: "payments",
@@ -395,6 +473,7 @@ export default defineCommand({
     "create-account-link": createAccountLinkCmd,
     onboard: onboardCmd,
     "create-checkout-session": createCheckoutSessionCmd,
+    "create-payment-intent": createPaymentIntentCmd,
     "create-subscription-product": createSubscriptionProductCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,
@@ -402,5 +481,6 @@ export default defineCommand({
     "list-sellers": listSellersCmd,
     "show-seller": showSellerCmd,
     "listen-webhooks": listenWebhooksCmd,
+    "serve-payment": servePaymentCmd,
   },
 })

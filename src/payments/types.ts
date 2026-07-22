@@ -12,6 +12,8 @@ export interface SellerRecord {
   onboardingStatus: "pending" | "complete"
   checkoutSessionId?: string
   checkoutUrl?: string
+  paymentIntentId?: string
+  lastPaymentIntentStatus?: string
   /** Default payment method for platform subscription fees (pm_...) */
   paymentMethodId?: string
   setupIntentId?: string
@@ -32,9 +34,20 @@ export interface PlatformCatalog {
   updatedAt?: string
 }
 
+export interface PaymentRecord {
+  id: string
+  paymentIntentId: string
+  amount: number
+  currency: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PaymentsStoreData {
   sellers: Record<string, SellerRecord>
   catalog: PlatformCatalog
+  payments: Record<string, PaymentRecord>
 }
 
 export interface CreateAccountInput {
@@ -59,6 +72,11 @@ export interface CreateCheckoutSessionInput {
   currency?: string
   applicationFeeAmount?: number
   quantity?: number
+}
+
+export interface CreatePaymentIntentInput {
+  amount?: number
+  currency?: string
 }
 
 export interface CreateSubscriptionProductInput {
