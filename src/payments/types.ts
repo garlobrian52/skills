@@ -12,6 +12,11 @@ export interface SellerRecord {
   onboardingStatus: "pending" | "complete"
   checkoutSessionId?: string
   checkoutUrl?: string
+  /** Direct-charge PaymentIntent on the connected account (pi_...) */
+  paymentIntentId?: string
+  /** Client secret for confirming the PaymentIntent with Stripe.js / Elements */
+  paymentIntentClientSecret?: string
+  lastPaymentIntentStatus?: string
   /** Default payment method for platform subscription fees (pm_...) */
   paymentMethodId?: string
   setupIntentId?: string
@@ -59,6 +64,14 @@ export interface CreateCheckoutSessionInput {
   currency?: string
   applicationFeeAmount?: number
   quantity?: number
+}
+
+export interface CreatePaymentIntentInput {
+  sellerId: string
+  /** Amount in minor units (default 2000). */
+  amount?: number
+  currency?: string
+  applicationFeeAmount?: number
 }
 
 export interface CreateSubscriptionProductInput {
