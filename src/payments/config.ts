@@ -75,3 +75,6 @@ export const DEFAULT_CHECKOUT_UNIT_AMOUNT = 100_000
 
 /** Default monthly platform subscription fee (minor units). */
 export const DEFAULT_SUBSCRIPTION_UNIT_AMOUNT = 1000
+
+/** Default one-time PaymentIntent amount (minor units). */
+export const DEFAULT_PAYMENT_INTENT_AMOUNT = 2000

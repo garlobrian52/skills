@@ -2,6 +2,7 @@ import { defineCommand } from "citty"
 import { createAccount } from "./payments/create-account.js"
 import { createAccountLink } from "./payments/create-account-link.js"
 import { createCheckoutSession } from "./payments/create-checkout-session.js"
+import { createPaymentIntent } from "./payments/create-payment-intent.js"
 import { createSubscriptionProduct } from "./payments/create-subscription-product.js"
 import { attachBalancePaymentMethod } from "./payments/attach-balance-payment-method.js"
 import { createSubscription } from "./payments/create-subscription.js"
@@ -136,6 +137,50 @@ const createCheckoutSessionCmd = defineCommand({
     }
     console.log(`Checkout session ${session.id} for seller ${seller.id}`)
     console.log(`  url: ${session.url}`)
+  },
+})
+
+const createPaymentIntentCmd = defineCommand({
+  meta: {
+    name: "create-payment-intent",
+    description:
+      "Create a PaymentIntent on the connected account with automatic payment methods",
+  },
+  args: {
+    seller: { type: "string", required: true, description: "Local seller ID" },
+    amount: {
+      type: "string",
+      description: "Amount in minor units (default 2000)",
+    },
+    applicationFeeAmount: {
+      type: "string",
+      description: "Application fee in minor units (default 123)",
+    },
+    currency: { type: "string", description: "Currency (default STRIPE_CURRENCY/usd)" },
+    json: { type: "boolean", default: false, description: "Print JSON" },
+  },
+  async run({ args }) {
+    const { seller, paymentIntent } = await createPaymentIntent({
+      sellerId: args.seller,
+      amount: args.amount ? Number(args.amount) : undefined,
+      applicationFeeAmount: args.applicationFeeAmount
+        ? Number(args.applicationFeeAmount)
+        : undefined,
+      currency: args.currency,
+    })
+    if (args.json) {
+      printJson({
+        seller,
+        paymentIntentId: paymentIntent.id,
+        clientSecret: paymentIntent.client_secret,
+        status: paymentIntent.status,
+        publishableKey: getStripePublishableKey() ?? null,
+      })
+      return
+    }
+    console.log(`PaymentIntent ${paymentIntent.id} for seller ${seller.id}`)
+    console.log(`  status: ${paymentIntent.status}`)
+    console.log(`  client_secret: ${paymentIntent.client_secret}`)
   },
 })
 
@@ -395,6 +440,7 @@ export default defineCommand({
     "create-account-link": createAccountLinkCmd,
     onboard: onboardCmd,
     "create-checkout-session": createCheckoutSessionCmd,
+    "create-payment-intent": createPaymentIntentCmd,
     "create-subscription-product": createSubscriptionProductCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,

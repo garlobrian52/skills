@@ -12,6 +12,8 @@ export interface SellerRecord {
   onboardingStatus: "pending" | "complete"
   checkoutSessionId?: string
   checkoutUrl?: string
+  paymentIntentId?: string
+  lastPaymentIntentStatus?: string
   /** Default payment method for platform subscription fees (pm_...) */
   paymentMethodId?: string
   setupIntentId?: string
@@ -59,6 +61,13 @@ export interface CreateCheckoutSessionInput {
   currency?: string
   applicationFeeAmount?: number
   quantity?: number
+}
+
+export interface CreatePaymentIntentInput {
+  sellerId: string
+  amount?: number
+  currency?: string
+  applicationFeeAmount?: number
 }
 
 export interface CreateSubscriptionProductInput {
