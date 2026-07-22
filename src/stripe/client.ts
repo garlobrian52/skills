@@ -1,15 +1,24 @@
 import Stripe from "stripe"
-import type { StripeConfig } from "./config.js"
+import { requireEnv } from "./env.js"
 
-let cachedClient: Stripe | null = null
-let cachedSecretKey: string | null = null
+let cached: Stripe | null = null
 
-export function getStripeClient(config: Pick<StripeConfig, "secretKey">): Stripe {
-  if (cachedClient && cachedSecretKey === config.secretKey) {
-    return cachedClient
-  }
-
-  cachedClient = new Stripe(config.secretKey)
-  cachedSecretKey = config.secretKey
-  return cachedClient
+/**
+ * Initialize the Stripe client. The API version is intentionally omitted so
+ * the SDK uses its bundled default (do not hard-code a version unless the
+ * integration blueprint specifies one).
+ */
+export function getStripeClient(secretKey?: string): Stripe {
+  if (cached && !secretKey) return cached
+  const key = secretKey ?? requireEnv("STRIPE_SECRET_KEY")
+  const client = new Stripe(key)
+  if (!secretKey) cached = client
+  return client
 }
+
+/** Reset the cached client (used in tests). */
+export function resetStripeClient(): void {
+  cached = null
+}
+
+export type { Stripe }
