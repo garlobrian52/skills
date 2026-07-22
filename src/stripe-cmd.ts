@@ -403,7 +403,7 @@ const handleWebhooksCmd = defineCommand({
           const message = err instanceof Error ? err.message : String(err)
           console.error("Webhook error:", message)
           res.writeHead(400, { "content-type": "application/json" })
-          res.end(JSON.stringify({ error: message }))
+          res.end(JSON.stringify({ error: "invalid_webhook_request" }))
         }
       })
 
