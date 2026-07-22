@@ -16,3 +16,4 @@ bun.lock
 *.log
 tmp/
 temp/
+.stripe-state.json
