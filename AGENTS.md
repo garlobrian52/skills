@@ -13,3 +13,4 @@ Non-obvious notes:
 - During a full install the CLI temporarily rewrites the repo's `.mcp.json` to inline the key and restores it in a `finally` block; if a run is killed mid-install, check `git status` and restore `.mcp.json`.
 - `node scripts/validate-template.mjs` validates the plugin template/marketplace files (the "no hooks/hooks.json" line is an expected warning, not a failure).
 - Tests set `POSTHOG_API_KEY=` so the suite does not send telemetry. The CLI uses `posthog-js` (lazy init in `src/posthog.ts`); telemetry is on by default with a baked-in project key — set `POSTHOG_API_KEY=""` to disable locally.
+- Stripe Accounts v2 payments live under `src/payments/` and the `payments` CLI subcommand. Copy `.env.example` and set `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` from the Stripe Dashboard. Leave the Stripe client `apiVersion` unset. Use `PAYMENTS_STORE_PATH` to point the local seller ID store at a temp file in tests.

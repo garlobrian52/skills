@@ -127,6 +127,36 @@ Set the empty value in your environment to opt out persistently. Developers can 
 
 > **Note:** `POSTHOG_API_KEY` is an analytics ingestion key. It is separate from the secret `CUBIC_API_KEY` (`cbk_*`) used to authenticate the cubic MCP connection.
 
+## Stripe payments (Accounts v2)
+
+The CLI also includes a `payments` command group for Connect Accounts v2: onboard sellers, accept direct-charge Checkout payments with an application fee, and bill platform subscription fees from a connected account’s Stripe balance.
+
+Copy `.env.example` and set keys from the [Stripe Dashboard](https://dashboard.stripe.com/apikeys):
+
+```bash
+cp .env.example .env
+# STRIPE_SECRET_KEY=sk_test_...
+# STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+Typical flow:
+
+```bash
+# 1) Create connected account + onboarding link
+node dist/index.js payments onboard --json
+
+# 2) After KYC, create a Checkout Session on the connected account
+node dist/index.js payments create-checkout-session --seller <seller_id>
+
+# 3) Charge platform subscription from the seller's Stripe balance
+node dist/index.js payments charge-platform-subscription --seller <seller_id>
+
+# Optional: local webhook listener for capability / checkout / invoice events
+node dist/index.js payments listen-webhooks --port 4242
+```
+
+Seller Stripe IDs (`stripeAccountId`, `subscriptionId`, etc.) are persisted under `~/.cubic-plugin/payments-store.json` (override with `PAYMENTS_STORE_PATH`).
+
 ## Commands
 
 | Command                          | Description                                                            |
