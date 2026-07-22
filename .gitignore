@@ -6,6 +6,7 @@ bun.lock
 .env
 .env.*
 !.env.example
+.stripe-store.json
 
 # OS and editor
 .DS_Store
