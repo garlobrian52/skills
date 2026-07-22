@@ -6,9 +6,14 @@ import {
   getCurrency,
 } from "./config.js"
 import { PaymentsStore } from "./store.js"
-import type { CreatePaymentIntentInput, SellerRecord } from "./types.js"
+import type {
+  CreatePaymentIntentInput,
+  PaymentRecord,
+  SellerRecord,
+} from "./types.js"
 
 export interface CreatePaymentIntentResult {
+  payment: PaymentRecord
   paymentIntent: Stripe.PaymentIntent
   /** Present when the PaymentIntent was created on a connected account. */
   seller?: SellerRecord
@@ -68,11 +73,20 @@ export async function createPaymentIntent(
     seller = await store.updateSeller(seller.id, {
       paymentIntentId: paymentIntent.id,
       paymentIntentStatus: paymentIntent.status,
+      lastPaymentIntentStatus: paymentIntent.status,
       paymentIntentClientSecret: paymentIntent.client_secret ?? undefined,
     })
   }
 
+  const payment = await store.createPayment({
+    paymentIntentId: paymentIntent.id,
+    amount: Math.trunc(amount),
+    currency,
+    status: paymentIntent.status,
+  })
+
   return {
+    payment,
     paymentIntent,
     seller,
     clientSecret: paymentIntent.client_secret,

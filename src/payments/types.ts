@@ -15,6 +15,7 @@ export interface SellerRecord {
   /** Latest PaymentIntent created for this seller (pi_...) */
   paymentIntentId?: string
   paymentIntentStatus?: string
+  lastPaymentIntentStatus?: string
   /** client_secret for confirming the PaymentIntent on the client */
   paymentIntentClientSecret?: string
   /** Default payment method for platform subscription fees (pm_...) */
@@ -37,9 +38,20 @@ export interface PlatformCatalog {
   updatedAt?: string
 }
 
+export interface PaymentRecord {
+  id: string
+  paymentIntentId: string
+  amount: number
+  currency: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PaymentsStoreData {
   sellers: Record<string, SellerRecord>
   catalog: PlatformCatalog
+  payments: Record<string, PaymentRecord>
 }
 
 export interface CreateAccountInput {

@@ -2,11 +2,17 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { getPaymentsStorePath } from "./config.js"
-import type { PaymentsStoreData, PlatformCatalog, SellerRecord } from "./types.js"
+import type {
+  PaymentRecord,
+  PaymentsStoreData,
+  PlatformCatalog,
+  SellerRecord,
+} from "./types.js"
 
 const emptyStore = (): PaymentsStoreData => ({
   sellers: {},
   catalog: {},
+  payments: {},
 })
 
 async function ensureParentDir(filePath: string): Promise<void> {
@@ -27,6 +33,7 @@ export class PaymentsStore {
       return {
         sellers: parsed.sellers ?? {},
         catalog: parsed.catalog ?? {},
+        payments: parsed.payments ?? {},
       }
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code
@@ -106,6 +113,64 @@ export class PaymentsStore {
     }
     await this.write(data)
     return data.catalog
+  }
+
+  async getPayment(paymentId: string): Promise<PaymentRecord | null> {
+    const data = await this.read()
+    return data.payments[paymentId] ?? null
+  }
+
+  async getPaymentByPaymentIntentId(
+    paymentIntentId: string,
+  ): Promise<PaymentRecord | null> {
+    const data = await this.read()
+    return (
+      Object.values(data.payments).find(
+        (p) => p.paymentIntentId === paymentIntentId,
+      ) ?? null
+    )
+  }
+
+  async listPayments(): Promise<PaymentRecord[]> {
+    const data = await this.read()
+    return Object.values(data.payments).sort((a, b) =>
+      a.createdAt.localeCompare(b.createdAt),
+    )
+  }
+
+  async createPayment(
+    input: Omit<PaymentRecord, "id" | "createdAt" | "updatedAt">,
+  ): Promise<PaymentRecord> {
+    const data = await this.read()
+    const now = new Date().toISOString()
+    const record: PaymentRecord = {
+      id: `pay_${randomUUID().replace(/-/g, "").slice(0, 16)}`,
+      ...input,
+      createdAt: now,
+      updatedAt: now,
+    }
+    data.payments[record.id] = record
+    await this.write(data)
+    return record
+  }
+
+  async updatePayment(
+    paymentId: string,
+    patch: Partial<Omit<PaymentRecord, "id" | "createdAt">>,
+  ): Promise<PaymentRecord> {
+    const existing = await this.getPayment(paymentId)
+    if (!existing) {
+      throw new Error(`Payment not found: ${paymentId}`)
+    }
+    const data = await this.read()
+    const record: PaymentRecord = {
+      ...existing,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    }
+    data.payments[paymentId] = record
+    await this.write(data)
+    return record
   }
 }
 
