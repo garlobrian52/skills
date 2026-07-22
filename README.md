@@ -186,6 +186,25 @@ skills/
 └── README.md
 ```
 
+## Stripe Accounts v2 (platform payments)
+
+The CLI also includes Stripe Accounts v2 helpers for onboarding connected sellers, accepting direct charges with an application fee, and charging platform subscriptions from the connected account balance:
+
+```bash
+cp .env.example .env
+# Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY from https://dashboard.stripe.com/apikeys
+
+node dist/index.js stripe create-account --seller acme
+node dist/index.js stripe create-account-link --seller acme
+node dist/index.js stripe create-checkout-session --seller acme
+node dist/index.js stripe create-subscription-plan --seller acme
+node dist/index.js stripe attach-balance-payment-method --seller acme
+node dist/index.js stripe create-subscription --seller acme
+node dist/index.js stripe handle-webhooks --port 4242
+```
+
+Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).
+
 ## License
 
 MIT
