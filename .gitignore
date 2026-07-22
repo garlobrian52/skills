@@ -7,6 +7,10 @@ bun.lock
 .env.*
 !.env.example
 
+# Local Stripe Accounts v2 merchant store (override with STRIPE_DATA_PATH)
+.stripe-store.json
+stripe-store.json
+
 # OS and editor
 .DS_Store
 *.swp

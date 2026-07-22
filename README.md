@@ -186,6 +186,30 @@ skills/
 └── README.md
 ```
 
+## Stripe Accounts v2 (embedded payments + subscriptions)
+
+The CLI also includes Stripe Accounts v2 helpers for onboarding connected merchants, accepting direct charges with an application fee, and charging platform subscription fees from the connected account’s Stripe balance.
+
+1. Copy `.env.example` to `.env` and set `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` from the [Stripe Dashboard](https://dashboard.stripe.com/apikeys). Optionally set `CONNECTED_ACCOUNT_COUNTRY`, `CURRENCY`, and the return / success URLs.
+2. Run the flow (IDs are persisted under `~/.cubic-plugin/stripe-store.json`, or `STRIPE_DATA_PATH`):
+
+```bash
+npm run build
+export STRIPE_SECRET_KEY=sk_test_...   # from Stripe Dashboard
+export CONNECTED_ACCOUNT_COUNTRY=us
+export CURRENCY=usd
+
+node dist/index.js stripe create-account
+node dist/index.js stripe create-account-link
+# complete KYC via the printed Account Link URL, then:
+node dist/index.js stripe create-checkout-session
+node dist/index.js stripe create-product
+node dist/index.js stripe create-setup-intent
+node dist/index.js stripe create-subscription
+```
+
+Webhook handling covers `v2.core.account[configuration.merchant].capability_status_updated`, `checkout.session.completed`, and `invoice.payment_succeeded` via `stripe handle-webhook` (requires `STRIPE_WEBHOOK_SECRET`).
+
 ## License
 
 MIT
