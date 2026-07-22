@@ -7,6 +7,10 @@ bun.lock
 .env.*
 !.env.example
 
+# Local Stripe resource mappings
+.cubic-stripe-store.json
+.test-output/
+
 # OS and editor
 .DS_Store
 *.swp
