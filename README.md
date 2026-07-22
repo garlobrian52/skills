@@ -186,6 +186,26 @@ skills/
 └── README.md
 ```
 
+## Stripe Accounts v2 (optional)
+
+The CLI also includes Stripe Connect Accounts v2 helpers for embedded payments and platform subscriptions:
+
+```bash
+cp .env.example .env
+# Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY from https://dashboard.stripe.com/apikeys
+
+npm run build
+node dist/index.js stripe create-account
+node dist/index.js stripe create-account-link --account acct_...
+node dist/index.js stripe create-checkout-session --account acct_...
+node dist/index.js stripe create-subscription-product
+node dist/index.js stripe attach-balance-payment-method --account acct_...
+node dist/index.js stripe create-subscription --account acct_...
+node dist/index.js stripe serve   # local API + webhooks on :4242
+```
+
+Seller, checkout, and subscription Stripe IDs are stored in `.cubic-stripe-store.json`.
+
 ## License
 
 MIT
