@@ -145,9 +145,10 @@ export function startPaymentServer(
           }),
         )
       } catch (err) {
-        console.error("Failed to create PaymentIntent", err)
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("Failed to create PaymentIntent:", message)
         res.writeHead(500, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: "Failed to create PaymentIntent." }))
+        res.end(JSON.stringify({ error: "internal_error" }))
       }
       return
     }
@@ -169,9 +170,10 @@ export function startPaymentServer(
         res.writeHead(200, { "Content-Type": "application/json" })
         res.end(JSON.stringify(result))
       } catch (err) {
-        console.error("Failed to handle webhook", err)
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("Failed to process webhook:", message)
         res.writeHead(400, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: "Invalid webhook request." }))
+        res.end(JSON.stringify({ error: "invalid_webhook" }))
       }
       return
     }

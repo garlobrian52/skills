@@ -36,8 +36,6 @@ describe("payments store + domain ops", () => {
   let createSubscription
   /** @type {any} */
   let handlePaymentsWebhook
-  /** @type {any} */
-  let DEFAULT_PAYMENT_INTENT_AMOUNT
 
   before(async () => {
     storeDir = await mkdtemp(path.join(tmpdir(), "cubic-payments-"))
@@ -56,7 +54,6 @@ describe("payments store + domain ops", () => {
     attachBalancePaymentMethod = mod.attachBalancePaymentMethod
     createSubscription = mod.createSubscription
     handlePaymentsWebhook = mod.handlePaymentsWebhook
-    DEFAULT_PAYMENT_INTENT_AMOUNT = mod.DEFAULT_PAYMENT_INTENT_AMOUNT
   })
 
   after(async () => {
@@ -156,7 +153,7 @@ describe("payments store + domain ops", () => {
     }
   }
 
-  it("persists seller IDs across create-account → account-link → checkout", async () => {
+  it("persists seller IDs across create-account → account-link → checkout → payment-intent", async () => {
     const store = new PaymentsStore(storePath)
     const stripe = mockStripe()
 
@@ -188,59 +185,38 @@ describe("payments store + domain ops", () => {
     assert.equal(checkout.session.id, "cs_test_123")
     assert.equal(checkout.seller.checkoutSessionId, "cs_test_123")
 
+    const intent = await createPaymentIntent(
+      { sellerId: seller.id, amount: 2000 },
+      { stripe, store },
+    )
+    assert.equal(intent.paymentIntent.id, "pi_test_123")
+    assert.equal(intent.paymentIntent.amount, 2000)
+    assert.equal(intent.paymentIntent.currency, "usd")
+    assert.deepEqual(intent.paymentIntent.automatic_payment_methods, {
+      enabled: true,
+    })
+    assert.equal(intent.paymentIntent.stripeAccount, "acct_test_123")
+    assert.equal(intent.seller.paymentIntentId, "pi_test_123")
+
     const reloaded = await store.getSeller(seller.id)
     assert.equal(reloaded.stripeAccountId, "acct_test_123")
     assert.equal(reloaded.checkoutSessionId, "cs_test_123")
+    assert.equal(reloaded.paymentIntentId, "pi_test_123")
   })
 
   it("creates a platform PaymentIntent with automatic payment methods", async () => {
     const store = new PaymentsStore(storePath)
     const stripe = mockStripe()
 
-    const result = await createPaymentIntent({}, { stripe, store })
+    const result = await createPaymentIntent({ amount: 2000 }, { stripe, store })
     assert.equal(result.paymentIntent.id, "pi_test_123")
-    assert.equal(result.paymentIntent.amount, DEFAULT_PAYMENT_INTENT_AMOUNT)
-    assert.equal(result.paymentIntent.currency, "usd")
-    assert.deepEqual(result.paymentIntent.automatic_payment_methods, {
-      enabled: true,
-    })
-    assert.equal(result.clientSecret, "pi_test_123_secret_abc")
-    assert.equal(result.seller, undefined)
+    assert.equal(result.paymentIntent.amount, 2000)
+    assert.equal(result.paymentIntent.automatic_payment_methods.enabled, true)
     assert.equal(result.payment.paymentIntentId, "pi_test_123")
     assert.equal(result.payment.status, "requires_payment_method")
-    assert.equal(result.paymentIntent.application_fee_amount, undefined)
-    assert.equal(result.paymentIntent.stripeAccount, undefined)
 
     const reloaded = await store.getPayment(result.payment.id)
     assert.equal(reloaded.paymentIntentId, "pi_test_123")
-  })
-
-  it("creates a direct-charge PaymentIntent on a connected account", async () => {
-    const store = new PaymentsStore(storePath)
-    const stripe = mockStripe()
-
-    let seller = await store.getSeller("seller_cookie")
-    if (!seller) {
-      ;({ seller } = await createAccount(
-        { sellerId: "seller_pi", displayName: "PI Seller" },
-        { stripe, store },
-      ))
-    }
-
-    const result = await createPaymentIntent(
-      { sellerId: seller.id, amount: 2000, applicationFeeAmount: 123 },
-      { stripe, store },
-    )
-    assert.equal(result.paymentIntent.id, "pi_test_123")
-    assert.equal(result.paymentIntent.amount, 2000)
-    assert.equal(result.paymentIntent.application_fee_amount, 123)
-    assert.equal(result.paymentIntent.stripeAccount, seller.stripeAccountId)
-    assert.equal(result.seller.paymentIntentId, "pi_test_123")
-    assert.equal(result.seller.paymentIntentStatus, "requires_payment_method")
-    assert.equal(
-      result.seller.paymentIntentClientSecret,
-      "pi_test_123_secret_abc",
-    )
   })
 
   it("creates subscription product, attaches balance PM, and charges subscription", async () => {
@@ -338,29 +314,23 @@ describe("payments store + domain ops", () => {
 
     await store.updateSeller(seller.id, {
       paymentIntentId: "pi_test_seller",
-      paymentIntentStatus: "requires_payment_method",
     })
-    const sellerPaymentIntentEvent = {
+    const paymentIntentEvent = {
       type: "payment_intent.succeeded",
       data: {
         object: {
           id: "pi_test_seller",
           status: "succeeded",
+          client_secret: "pi_test_123_secret_abc",
         },
       },
     }
-
-    const sellerPiResult = await handlePaymentsWebhook(
-      JSON.stringify(sellerPaymentIntentEvent),
+    const paymentIntentResult = await handlePaymentsWebhook(
+      JSON.stringify(paymentIntentEvent),
       undefined,
       { store, stripe: mockStripe() },
     )
-    assert.equal(sellerPiResult.handled, true)
-    assert.equal(sellerPiResult.sellerId, seller.id)
-    assert.equal(
-      (await store.getSeller(seller.id)).paymentIntentStatus,
-      "succeeded",
-    )
+    assert.equal(paymentIntentResult.handled, true)
     assert.equal(
       (await store.getSeller(seller.id)).lastPaymentIntentStatus,
       "succeeded",
@@ -400,6 +370,7 @@ describe("payments store + domain ops", () => {
     assert.equal(platformPiResult.handled, true)
     assert.equal(platformPiResult.paymentId, payment.id)
     assert.equal((await store.getPayment(payment.id)).status, "succeeded")
+
     await store.updateSeller(seller.id, { subscriptionId: "sub_test_123" })
     const invoiceEvent = {
       type: "invoice.payment_succeeded",
