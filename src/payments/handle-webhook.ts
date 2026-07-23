@@ -95,37 +95,48 @@ export async function handlePaymentsWebhook(
     return { type, handled: false, detail: "No seller matched checkout session" }
   }
 
-  if (type === "payment_intent.succeeded") {
+  if (
+    type === "payment_intent.succeeded" ||
+    type === "payment_intent.payment_failed"
+  ) {
     const paymentIntent = (event as Stripe.Event).data
       .object as Stripe.PaymentIntent
 
+    let paymentId: string | undefined
     const payment = await store.getPaymentByPaymentIntentId(paymentIntent.id)
     if (payment) {
       await store.updatePayment(payment.id, {
         status: paymentIntent.status,
       })
-      return {
-        type,
-        handled: true,
-        paymentId: payment.id,
-        detail: "Recorded payment_intent.succeeded",
-      }
+      paymentId = payment.id
     }
 
+    let sellerId: string | undefined
     const sellers = await store.listSellers()
     const seller = sellers.find((s) => s.paymentIntentId === paymentIntent.id)
     if (seller) {
       await store.updateSeller(seller.id, {
+        paymentIntentStatus: paymentIntent.status,
         lastPaymentIntentStatus: paymentIntent.status,
       })
+      sellerId = seller.id
+    }
+
+    if (paymentId || sellerId) {
       return {
         type,
         handled: true,
-        sellerId: seller.id,
-        detail: "Recorded payment_intent.succeeded for seller",
+        paymentId,
+        sellerId,
+        detail: `Recorded ${type}`,
       }
     }
-    return { type, handled: false, detail: "No payment matched payment intent" }
+
+    return {
+      type,
+      handled: false,
+      detail: "No payment or seller matched payment intent",
+    }
   }
 
   if (type === "invoice.payment_succeeded") {
