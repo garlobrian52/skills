@@ -1,6 +1,6 @@
 import type Stripe from "stripe"
 import { getStripeClient } from "./client.js"
-import { optionalEnv } from "./env.js"
+import { optionalEnv, isStripeTestKey } from "./env.js"
 import {
   createEmptyRecord,
   requireAccount,
@@ -32,8 +32,14 @@ export async function createConnectedAccount(
   ).toLowerCase()
   const phone = input.phone ?? "0000000000"
 
-  // Blueprint includes merchant.simulate_accept_tos_obo (test helper) which is
-  // not yet in public SDK types — cast that field only.
+  const merchantConfig: Stripe.V2.Core.AccountCreateParams.Configuration.Merchant =
+    isStripeTestKey()
+      ? ({
+          // Test-only helper — rejected in live mode.
+          simulate_accept_tos_obo: true,
+        } as Stripe.V2.Core.AccountCreateParams.Configuration.Merchant)
+      : {}
+
   const account = await stripe.v2.core.accounts.create({
     display_name: displayName,
     contact_email: contactEmail,
@@ -53,9 +59,7 @@ export async function createConnectedAccount(
     configuration: {
       // Enable customer config so the account can be billed via customer_account.
       customer: {},
-      merchant: {
-        simulate_accept_tos_obo: true,
-      } as Stripe.V2.Core.AccountCreateParams.Configuration.Merchant,
+      merchant: merchantConfig,
     },
     include: [
       "configuration.merchant",

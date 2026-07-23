@@ -50,3 +50,9 @@ export function optionalEnv(name: string, fallback: string): string {
   const value = process.env[name]?.trim()
   return value || fallback
 }
+
+/** True when the Stripe secret/restricted key is for test mode. */
+export function isStripeTestKey(key?: string): boolean {
+  const value = (key ?? process.env.STRIPE_SECRET_KEY ?? "").trim()
+  return value.includes("_test_")
+}
