@@ -11,9 +11,13 @@ import {
   defaultStorePath,
   getAccount,
   handleStripeWebhookEvent,
+  inspectObject,
   loadEnvFile,
   loadStore,
   optionalEnv,
+  requireAccount,
+  runRequest,
+  updateObject,
 } from "./stripe/index.js"
 
 async function withEnv<T>(fn: () => Promise<T>): Promise<T> {
@@ -23,6 +27,38 @@ async function withEnv<T>(fn: () => Promise<T>): Promise<T> {
 
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2))
+}
+
+function parseJsonObject(
+  raw: string,
+  flagName: string,
+): Record<string, unknown> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error(`${flagName} must be valid JSON`)
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${flagName} must be a JSON object`)
+  }
+  return parsed as Record<string, unknown>
+}
+
+async function resolveStripeAccount(args: {
+  seller?: string
+  "stripe-account"?: string
+  store?: string
+}): Promise<string | undefined> {
+  if (args["stripe-account"]) return args["stripe-account"]
+  if (!args.seller) return undefined
+  const record = await requireAccount(args.seller, args.store)
+  if (!record.accountId) {
+    throw new Error(
+      `Seller "${args.seller}" has no Stripe account id. Run create-account first.`,
+    )
+  }
+  return record.accountId
 }
 
 const createAccountCmd = defineCommand({
@@ -341,6 +377,174 @@ const showStatusCmd = defineCommand({
   },
 })
 
+const inspectCmd = defineCommand({
+  meta: {
+    name: "inspect",
+    description:
+      "Inspect a Stripe API object (JSON, data map, related events) — Workbench Inspector",
+  },
+  args: {
+    id: {
+      type: "positional",
+      description: "Stripe object id (e.g. acct_..., pi_..., cus_...)",
+      required: true,
+    },
+    seller: {
+      type: "string",
+      description: "Local seller id (sets Stripe-Account from the store)",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Connected account id for Stripe-Account header",
+    },
+    expand: {
+      type: "string",
+      description: "Comma-separated expand[] fields for the retrieve request",
+    },
+    "events-limit": {
+      type: "string",
+      description: "Max related events to return (default 10)",
+      default: "10",
+    },
+    "no-events": {
+      type: "boolean",
+      description: "Skip listing related events",
+      default: false,
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const stripeAccount = await resolveStripeAccount(args)
+      const expand = args.expand
+        ?.split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+      const result = await inspectObject({
+        objectId: args.id,
+        expand,
+        eventsLimit: Number(args["events-limit"]) || 10,
+        includeEvents: !args["no-events"],
+        stripeAccount,
+      })
+      printJson({ ok: true, action: "inspect", ...result })
+    })
+  },
+})
+
+const updateCmd = defineCommand({
+  meta: {
+    name: "update",
+    description:
+      "Update a Stripe API object via POST — Workbench API Explorer (test mode only)",
+  },
+  args: {
+    id: {
+      type: "positional",
+      description: "Stripe object id to update",
+      required: true,
+    },
+    params: {
+      type: "string",
+      description: 'JSON object of fields to update (e.g. \'{"description":"..."}\')',
+      required: true,
+    },
+    seller: {
+      type: "string",
+      description: "Local seller id (sets Stripe-Account from the store)",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Connected account id for Stripe-Account header",
+    },
+    "allow-live": {
+      type: "boolean",
+      description: "Allow updates with a live secret key (not recommended)",
+      default: false,
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const stripeAccount = await resolveStripeAccount(args)
+      const result = await updateObject({
+        objectId: args.id,
+        params: parseJsonObject(args.params, "--params"),
+        stripeAccount,
+        allowLive: args["allow-live"],
+      })
+      printJson({ ok: true, action: "update", ...result })
+    })
+  },
+})
+
+const runRequestCmd = defineCommand({
+  meta: {
+    name: "run-request",
+    description:
+      "Run a raw Stripe API request — Workbench Shell (GET/POST/DELETE)",
+  },
+  args: {
+    method: {
+      type: "positional",
+      description: "HTTP method: GET, POST, or DELETE",
+      required: true,
+    },
+    path: {
+      type: "positional",
+      description: "API path (e.g. /v1/customers/cus_...)",
+      required: true,
+    },
+    params: {
+      type: "string",
+      description: "Optional JSON object of query/body parameters",
+    },
+    seller: {
+      type: "string",
+      description: "Local seller id (sets Stripe-Account from the store)",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Connected account id for Stripe-Account header",
+    },
+    "allow-live": {
+      type: "boolean",
+      description: "Allow mutating requests with a live secret key",
+      default: false,
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const method = args.method.toUpperCase()
+      if (method !== "GET" && method !== "POST" && method !== "DELETE") {
+        throw new Error("method must be GET, POST, or DELETE")
+      }
+      const stripeAccount = await resolveStripeAccount(args)
+      const params = args.params
+        ? parseJsonObject(args.params, "--params")
+        : undefined
+      const result = await runRequest({
+        method,
+        path: args.path,
+        params,
+        stripeAccount,
+        allowLive: args["allow-live"],
+      })
+      printJson({ ok: true, action: "run-request", ...result })
+    })
+  },
+})
+
 const handleWebhooksCmd = defineCommand({
   meta: {
     name: "handle-webhooks",
@@ -442,6 +646,9 @@ export default defineCommand({
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,
     "show-status": showStatusCmd,
+    inspect: inspectCmd,
+    update: updateCmd,
+    "run-request": runRequestCmd,
     "handle-webhooks": handleWebhooksCmd,
   },
 })

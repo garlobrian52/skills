@@ -201,9 +201,26 @@ node dist/index.js stripe create-subscription-plan --seller acme
 node dist/index.js stripe attach-balance-payment-method --seller acme
 node dist/index.js stripe create-subscription --seller acme
 node dist/index.js stripe handle-webhooks --port 4242
+
+# Workbench-style debugging (Inspector / API Explorer / Shell)
+node dist/index.js stripe inspect cus_123 --seller acme
+node dist/index.js stripe update cus_123 --params '{"description":"Updated from CLI"}'
+node dist/index.js stripe run-request GET /v1/customers/cus_123 --seller acme
 ```
 
 Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).
+
+### Workbench-style debugging
+
+Inspired by [Stripe Workbench Inspector](https://docs.stripe.com/workbench/overview#use-the-inspector-to-learn-about-api-objects), the CLI can inspect API objects, list related events, and update objects from the terminal:
+
+| Command | Workbench equivalent |
+| --- | --- |
+| `stripe inspect <id>` | Inspector — JSON view, data map, related events, dashboard links |
+| `stripe update <id> --params '{...}'` | API Explorer — POST updates (test mode only, like Shell) |
+| `stripe run-request <METHOD> <path>` | Shell — arbitrary GET/POST/DELETE requests |
+
+Pass `--seller <id>` to set the `Stripe-Account` header from your local store when inspecting connected-account objects.
 
 ## License
 

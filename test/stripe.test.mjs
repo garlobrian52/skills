@@ -26,6 +26,9 @@ describe("stripe CLI help", () => {
     assert.match(stdout, /attach-balance-payment-method/)
     assert.match(stdout, /create-subscription/)
     assert.match(stdout, /handle-webhooks/)
+    assert.match(stdout, /inspect/)
+    assert.match(stdout, /update/)
+    assert.match(stdout, /run-request/)
     assert.doesNotMatch(stdout, /chapter/i)
   })
 })
@@ -289,6 +292,154 @@ describe("stripe domain operations (mocked client)", () => {
     assert.equal(finalRecord.priceId, "price_mock_1")
     assert.equal(finalRecord.paymentMethodId, "pm_balance_1")
     assert.equal(finalRecord.subscriptionId, "sub_mock_1")
+  })
+})
+
+describe("stripe workbench inspector + explorer", () => {
+  let stripeMod
+
+  before(async () => {
+    stripeMod = await import(
+      pathToFileURL(path.join(ROOT, "dist", "stripe", "index.js")).href
+    )
+  })
+
+  function mockStripeForWorkbench() {
+    return {
+      rawRequest: async (method, path, params, options) => {
+        if (method === "GET" && path.startsWith("/v1/customers/cus_")) {
+          assert.equal(options?.stripeAccount, "acct_connected_1")
+          return {
+            id: "cus_test_1",
+            object: "customer",
+            email: "buyer@example.com",
+            subscription: "sub_test_1",
+          }
+        }
+        if (method === "GET" && path === "/v1/events") {
+          return {
+            data: [
+              {
+                id: "evt_v1_1",
+                type: "customer.updated",
+                created: 1700000000,
+                api_version: "2024-06-20",
+              },
+            ],
+          }
+        }
+        if (method === "POST" && path === "/v1/customers/cus_test_1") {
+          return {
+            id: "cus_test_1",
+            object: "customer",
+            email: params.email,
+            description: params.description,
+          }
+        }
+        throw new Error(`Unexpected rawRequest ${method} ${path}`)
+      },
+      v2: {
+        core: {
+          events: {
+            list: async (params) => {
+              assert.equal(params.object_id, "cus_test_1")
+              return {
+                data: [
+                  {
+                    id: "evt_v2_1",
+                    type: "v2.core.account.updated",
+                    created: "2024-01-02T00:00:00.000Z",
+                  },
+                ],
+              }
+            },
+          },
+        },
+      },
+    }
+  }
+
+  it("builds a data map from related object fields", () => {
+    const map = stripeMod.buildDataMap({
+      id: "pi_test_1",
+      customer: "cus_test_1",
+      latest_charge: "ch_test_1",
+      metadata: { order: "42" },
+    })
+    assert.ok(map.some((entry) => entry.id === "cus_test_1"))
+    assert.ok(map.some((entry) => entry.id === "ch_test_1"))
+  })
+
+  it("inspects an object with events and workbench links", async () => {
+    const prevKey = process.env.STRIPE_SECRET_KEY
+    process.env.STRIPE_SECRET_KEY = "sk_test_workbench"
+    const stripe = mockStripeForWorkbench()
+
+    const result = await stripeMod.inspectObject(
+      {
+        objectId: "cus_test_1",
+        stripeAccount: "acct_connected_1",
+        eventsLimit: 5,
+      },
+      stripe,
+    )
+
+    assert.equal(result.resource, "Customer")
+    assert.equal(result.object.email, "buyer@example.com")
+    assert.equal(result.dataMap.length, 1)
+    assert.equal(result.events.length, 2)
+    assert.match(result.workbench.inspectorUrl, /workbench\/inspector\/cus_test_1/)
+    assert.match(result.workbench.logsUrl, /related_object=cus_test_1/)
+
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
+  })
+
+  it("updates objects in test mode and blocks live mode", async () => {
+    const prevKey = process.env.STRIPE_SECRET_KEY
+    process.env.STRIPE_SECRET_KEY = "sk_test_workbench"
+    const stripe = mockStripeForWorkbench()
+
+    const updated = await stripeMod.updateObject(
+      {
+        objectId: "cus_test_1",
+        params: { description: "VIP", email: "vip@example.com" },
+      },
+      stripe,
+    )
+    assert.equal(updated.object.description, "VIP")
+
+    process.env.STRIPE_SECRET_KEY = "sk_live_blocked"
+    await assert.rejects(
+      () =>
+        stripeMod.updateObject(
+          { objectId: "cus_test_1", params: { description: "nope" } },
+          stripe,
+        ),
+      /read-only in live mode/i,
+    )
+
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
+  })
+
+  it("runs arbitrary API requests", async () => {
+    const prevKey = process.env.STRIPE_SECRET_KEY
+    process.env.STRIPE_SECRET_KEY = "sk_test_workbench"
+    const stripe = mockStripeForWorkbench()
+
+    const result = await stripeMod.runRequest(
+      {
+        method: "GET",
+        path: "/v1/customers/cus_test_1",
+        stripeAccount: "acct_connected_1",
+      },
+      stripe,
+    )
+    assert.equal(result.response.id, "cus_test_1")
+
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
   })
 })
 
