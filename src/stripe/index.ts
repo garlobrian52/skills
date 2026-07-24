@@ -31,3 +31,23 @@ export {
   CHECKOUT_COMPLETED_EVENT,
   INVOICE_PAYMENT_SUCCEEDED_EVENT,
 } from "./webhooks.js"
+export {
+  inspectObject,
+  buildDataMap,
+  type InspectObjectInput,
+  type InspectObjectResult,
+  type DataMapEntry,
+  type RelatedEventSummary,
+} from "./inspect.js"
+export {
+  apiRequest,
+  parseParamPairs,
+  type ApiRequestInput,
+  type ApiRequestResult,
+  type ApiHttpMethod,
+} from "./request.js"
+export {
+  resolveObjectPath,
+  guessObjectType,
+  type ObjectPathSpec,
+} from "./object-paths.js"

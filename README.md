@@ -205,6 +205,23 @@ node dist/index.js stripe handle-webhooks --port 4242
 
 Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).
 
+### Workbench Inspector + API Explorer
+
+Peek under the hood of any Stripe API object (data map, related events, and request summaries), then edit it with Shell-style requests — the same workflow as [Dashboard Workbench](https://docs.stripe.com/workbench):
+
+```bash
+# Inspector: retrieve object JSON + related ids/events/logs
+node dist/index.js stripe inspect-object --id pi_...
+node dist/index.js stripe inspect-object --id cus_... --related
+
+# API Explorer / Shell: GET, POST, or DELETE (sandbox / test mode)
+node dist/index.js stripe api-request --method GET --path pi_...
+node dist/index.js stripe api-request --method POST --path /v1/customers/cus_... \
+  --param "metadata[note]=from-cli"
+```
+
+Deep links in the inspect output open the same object in Dashboard Workbench Inspector, Logs, Events, and Shell.
+
 ## License
 
 MIT

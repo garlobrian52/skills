@@ -1,6 +1,7 @@
 import { createServer } from "http"
 import { defineCommand } from "citty"
 import {
+  apiRequest,
   attachBalancePaymentMethod,
   createAccountOnboardingLink,
   createConnectedAccount,
@@ -11,9 +12,11 @@ import {
   defaultStorePath,
   getAccount,
   handleStripeWebhookEvent,
+  inspectObject,
   loadEnvFile,
   loadStore,
   optionalEnv,
+  parseParamPairs,
 } from "./stripe/index.js"
 
 async function withEnv<T>(fn: () => Promise<T>): Promise<T> {
@@ -308,6 +311,124 @@ const createSubscriptionCmd = defineCommand({
   },
 })
 
+const inspectObjectCmd = defineCommand({
+  meta: {
+    name: "inspect-object",
+    description:
+      "Workbench Inspector: retrieve an API object plus related data map, events, and request summaries",
+  },
+  args: {
+    id: {
+      type: "string",
+      description: "Stripe object id (e.g. pi_…, cus_…, sub_…, acct_…)",
+      required: true,
+    },
+    path: {
+      type: "string",
+      description: "Optional absolute API path override (e.g. /v1/customers/cus_…)",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Connected account id for the Stripe-Account header",
+    },
+    "events-limit": {
+      type: "string",
+      description: "Max related events to fetch (default 20)",
+      default: "20",
+    },
+    related: {
+      type: "boolean",
+      description: "Also retrieve related objects one level deep",
+      default: false,
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const result = await inspectObject({
+        objectId: args.id,
+        path: args.path,
+        stripeAccount: args["stripe-account"],
+        eventsLimit: args["events-limit"]
+          ? Number(args["events-limit"])
+          : undefined,
+        fetchRelated: Boolean(args.related),
+      })
+      printJson({
+        ok: true,
+        action: "inspect-object",
+        ...result,
+      })
+    })
+  },
+})
+
+const apiRequestCmd = defineCommand({
+  meta: {
+    name: "api-request",
+    description:
+      "Workbench Shell / API Explorer: run GET, POST, or DELETE against the Stripe API to view or edit objects",
+  },
+  args: {
+    method: {
+      type: "string",
+      description: "HTTP method: GET, POST, or DELETE",
+      default: "GET",
+    },
+    path: {
+      type: "string",
+      description:
+        "API path (/v1/…) or object id (resolved to a path like Workbench Explorer)",
+      required: true,
+    },
+    param: {
+      type: "string",
+      description: "Form field as key=value (repeatable)",
+    },
+    "json-body": {
+      type: "string",
+      description: "JSON object string merged into request params",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Connected account id for the Stripe-Account header",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      let params = parseParamPairs(
+        args.param as string | string[] | undefined,
+      )
+      if (args["json-body"]) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(args["json-body"])
+        } catch {
+          throw new Error("--json-body must be valid JSON")
+        }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("--json-body must be a JSON object")
+        }
+        params = { ...params, ...(parsed as Record<string, unknown>) }
+      }
+      const method = String(args.method || "GET").toUpperCase()
+      if (method !== "GET" && method !== "POST" && method !== "DELETE") {
+        throw new Error(`Unsupported method "${args.method}". Use GET, POST, or DELETE.`)
+      }
+      const result = await apiRequest({
+        method,
+        path: args.path,
+        params: Object.keys(params).length ? params : undefined,
+        stripeAccount: args["stripe-account"],
+      })
+      printJson({
+        ok: true,
+        action: "api-request",
+        ...result,
+      })
+    })
+  },
+})
+
 const showStatusCmd = defineCommand({
   meta: {
     name: "show-status",
@@ -441,6 +562,8 @@ export default defineCommand({
     "create-subscription-plan": createSubscriptionPlanCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,
+    "inspect-object": inspectObjectCmd,
+    "api-request": apiRequestCmd,
     "show-status": showStatusCmd,
     "handle-webhooks": handleWebhooksCmd,
   },
