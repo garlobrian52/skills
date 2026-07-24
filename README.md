@@ -212,15 +212,78 @@ Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STR
 
 ### Workbench-style debugging
 
-Inspired by [Stripe Workbench Inspector](https://docs.stripe.com/workbench/overview#use-the-inspector-to-learn-about-api-objects), the CLI can inspect API objects, list related events, and update objects from the terminal:
+Inspired by [Stripe Workbench Inspector](https://docs.stripe.com/workbench/overview#use-the-inspector-to-learn-about-api-objects), the CLI mirrors Workbench Inspector, API Explorer, and Shell for local debugging. Implementation lives under `src/stripe/workbench/` (`object-routes`, `inspector`, `explorer`) and is wired through `src/stripe-cmd.ts`.
 
-| Command | Workbench equivalent |
-| --- | --- |
-| `stripe inspect <id>` | Inspector — JSON view, data map, related events, dashboard links |
-| `stripe update <id> --params '{...}'` | API Explorer — POST updates (test mode only, like Shell) |
-| `stripe run-request <METHOD> <path>` | Shell — arbitrary GET/POST/DELETE requests |
+| Command | Workbench equivalent | Intent |
+| --- | --- | --- |
+| `stripe inspect <id>` | Inspector | Retrieve JSON, related-object data map, recent v1/v2 events, and dashboard Workbench links |
+| `stripe update <id> --params '{...}'` | API Explorer | POST an update via the built-in route for that id prefix |
+| `stripe run-request <METHOD> <path>` | Shell | Issue an arbitrary `GET` / `POST` / `DELETE` against a Stripe API path |
 
-Pass `--seller <id>` to set the `Stripe-Account` header from your local store when inspecting connected-account objects.
+```bash
+# Inspect (optionally expand fields; skip or cap related events)
+node dist/index.js stripe inspect cus_123 --seller acme \
+  --expand "subscriptions,invoice_settings.default_payment_method" \
+  --events-limit 5
+
+node dist/index.js stripe inspect pi_123 --no-events
+
+# Update in test mode (requires --params JSON)
+node dist/index.js stripe update prod_123 \
+  --params '{"description":"1.99 USD per month"}'
+
+# Raw request when no built-in route exists
+node dist/index.js stripe run-request GET /v1/customers/cus_123 --seller acme
+node dist/index.js stripe run-request POST /v1/customers/cus_123 \
+  --params '{"metadata":{"tier":"gold"}}'
+```
+
+#### Connected accounts
+
+`--stripe-account <acct_…>` sets the `Stripe-Account` header directly. `--seller <id>` resolves the same header from `.cubic-stripe.json` (or `--store` / `CUBIC_STRIPE_STORE`). If both are passed, `--stripe-account` wins. The seller must already have an account id from `create-account`.
+
+#### Built-in object routes
+
+`inspect` / `update` resolve paths from the id prefix (`acct_`, `cus_`, `pi_`, …). Unsupported prefixes fail with a hint to use `run-request` and an explicit path.
+
+| Prefix | Resource | Retrieve | Update via `stripe update` |
+| --- | --- | --- | --- |
+| `acct_` | Account (v2) | `/v2/core/accounts/{id}` | yes |
+| `cus_` | Customer | `/v1/customers/{id}` | yes |
+| `pi_` | PaymentIntent | `/v1/payment_intents/{id}` | yes |
+| `cs_` | CheckoutSession | `/v1/checkout/sessions/{id}` | yes |
+| `sub_` | Subscription | `/v1/subscriptions/{id}` | yes |
+| `prod_` | Product | `/v1/products/{id}` | yes |
+| `price_` | Price | `/v1/prices/{id}` | yes |
+| `in_` | Invoice | `/v1/invoices/{id}` | yes |
+| `seti_` | SetupIntent | `/v1/setup_intents/{id}` | yes |
+| `pm_` | PaymentMethod | `/v1/payment_methods/{id}` | yes |
+| `ch_` | Charge | `/v1/charges/{id}` | yes |
+| `evt_` | Event (v1) | `/v1/events/{id}` | no — use `run-request` |
+
+#### Inspect output
+
+`inspect` prints JSON with:
+
+- `object` — retrieved Stripe payload (optional `--expand` comma-separated `expand[]` fields)
+- `dataMap` — related ids from known relation fields and nested `{ id }` objects
+- `events` — merged v1 (`related_object`) and v2 (`object_id`) event lists, newest first (default limit 10; `--no-events` skips; failures on either list are ignored)
+- `workbench.inspectorUrl` / `workbench.logsUrl` — Dashboard links (test vs live based on whether `STRIPE_SECRET_KEY` contains `_test_`)
+- `workbench.shellHint` — suggested `update` or `run-request` follow-up
+
+#### Live-mode safety
+
+Test mode is detected when `STRIPE_SECRET_KEY` contains `_test_` (for example `sk_test_…`). In live mode, `update` and mutating `run-request` (`POST` / `DELETE`) are blocked unless you pass `--allow-live`. Prefer a test key; `--allow-live` is an escape hatch, not the default workflow.
+
+#### Common pitfalls
+
+- Build first (`npm run build`) so `node dist/index.js stripe …` picks up Workbench commands.
+- `--params` must be a JSON object string; invalid JSON fails before the API call.
+- `run-request` methods are only `GET`, `POST`, and `DELETE` (case-insensitive).
+- Inspect/update only work for the prefixes above; other resources need an explicit `run-request` path.
+- Connected-account objects need `--seller` or `--stripe-account`; platform-scoped inspect against a connected object will 404 or return the wrong resource.
+
+Use `stripe show-status [--seller <id>]` to print persisted resource ids from the local store when debugging seller wiring.
 
 ## License
 
