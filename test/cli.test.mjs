@@ -4,13 +4,21 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { access, mkdir, rm, writeFile } from "node:fs/promises"
+import { access, lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { pathToFileURL } from "node:url"
 
 const exec = promisify(execFile)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CLI = path.join(__dirname, "..", "dist", "index.js")
 const TMP_BASE = path.join(__dirname, "..", ".test-output")
+const SKILLS = [
+  "check-pr-comments",
+  "codebase-context",
+  "cubic-loop",
+  "review-patterns",
+  "run-review",
+]
+const COMMANDS = ["comments", "learnings", "run-review", "scan", "wiki"]
 
 async function cleanup() {
   await rm(TMP_BASE, { recursive: true, force: true }).catch(() => {})
@@ -50,8 +58,9 @@ describe("install --json --skills-only", () => {
     assert.ok(result)
     assert.equal(result.agent, "claude")
     assert.equal(result.status, "ok")
-    assert.equal(result.skills, 1)
-    assert.equal(result.commands, 1)
+    assert.equal(result.skills, 5)
+    assert.equal(result.commands, 5)
+    assert.equal(result.prompts, 0)
     assert.equal(result.mcpServers, 0)
 
     const summary = events.find((e) => e.type === "install_summary")
@@ -94,8 +103,156 @@ describe("install --json --skills-only", () => {
 
     const summary = events.find((e) => e.type === "install_summary")
     assert.equal(summary.targetsTotal, 8)
-    assert.equal(summary.skillsTotal, 8)
-    assert.equal(summary.commandsTotal, 8)
+    assert.equal(summary.skillsTotal, 40)
+    assert.equal(summary.commandsTotal, 30)
+    assert.equal(summary.promptsTotal, 10)
+
+    const layouts = {
+      claude: {
+        skills: [".claude", "skills"],
+        commands: [".claude", "commands"],
+        commandFile: (name) => `${name}.md`,
+        outputType: "command",
+        mcp: ".mcp.json",
+      },
+      opencode: {
+        skills: ["skills"],
+        commands: ["commands"],
+        commandFile: (name) => `cubic-${name}.md`,
+        outputType: "command",
+        mcp: "opencode.json",
+      },
+      codex: {
+        skills: ["skills"],
+        commands: ["prompts"],
+        commandFile: (name) => `cubic-${name}.md`,
+        outputType: "prompt",
+        mcp: "config.toml",
+      },
+      cursor: {
+        skills: ["skills"],
+        commands: ["commands"],
+        commandFile: (name) => `cubic-${name}.md`,
+        outputType: "command",
+        mcp: "mcp.json",
+      },
+      droid: {
+        skills: ["skills"],
+        commands: ["commands"],
+        commandFile: (name) => `cubic-${name}.md`,
+        outputType: "command",
+        mcp: "mcp.json",
+      },
+      pi: {
+        skills: ["skills"],
+        commands: ["prompts"],
+        commandFile: (name) => `cubic-${name}.md`,
+        outputType: "prompt",
+        mcp: path.join("cubic", "mcporter.json"),
+      },
+      gemini: {
+        skills: ["skills"],
+        commands: ["commands"],
+        commandFile: (name) => `cubic-${name}.toml`,
+        outputType: "command",
+        mcp: "settings.json",
+      },
+      universal: {
+        skills: [".agents", "skills"],
+        commands: [".agents", "commands"],
+        commandFile: (name) => `cubic-${name}.md`,
+        outputType: "command",
+      },
+    }
+
+    for (const [target, layout] of Object.entries(layouts)) {
+      const root = path.join(outDir, target)
+      for (const skill of SKILLS) {
+        await access(path.join(root, ...layout.skills, skill, "SKILL.md"))
+      }
+      for (const command of COMMANDS) {
+        await access(path.join(root, ...layout.commands, layout.commandFile(command)))
+      }
+      if (layout.mcp) {
+        await assert.rejects(access(path.join(root, layout.mcp)))
+      }
+
+      const manifest = JSON.parse(
+        await readFile(path.join(root, ".cubic-manifest.json"), "utf-8"),
+      )
+      assert.equal(manifest.entries.filter((entry) => entry.type === "skill").length, 5)
+      assert.equal(
+        manifest.entries.filter((entry) => entry.type === layout.outputType).length,
+        5,
+      )
+      assert.equal(
+        manifest.entries.some((entry) => entry.type === "mcp-config"),
+        false,
+      )
+    }
+  })
+
+  it("symlinks every skill while writing transformed commands as files", async () => {
+    const outDir = path.join(TMP_BASE, "json-symlink-all")
+    const { stdout } = await exec("node", [
+      CLI,
+      "install",
+      "--json",
+      "--skills-only",
+      "--method",
+      "symlink",
+      "--to",
+      "all",
+      "-o",
+      outDir,
+    ])
+
+    const events = stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+    const summary = events.find((event) => event.type === "install_summary")
+    assert.equal(summary.skillsTotal, 40)
+    assert.equal(summary.commandsTotal, 30)
+    assert.equal(summary.promptsTotal, 10)
+
+    const skillDirs = {
+      claude: [".claude", "skills"],
+      opencode: ["skills"],
+      codex: ["skills"],
+      cursor: ["skills"],
+      droid: ["skills"],
+      pi: ["skills"],
+      gemini: ["skills"],
+      universal: [".agents", "skills"],
+    }
+    for (const [target, skillDir] of Object.entries(skillDirs)) {
+      for (const skill of SKILLS) {
+        const stat = await lstat(
+          path.join(outDir, target, ...skillDir, skill, "SKILL.md"),
+        )
+        assert.equal(stat.isSymbolicLink(), true, `${target}/${skill} is symlinked`)
+      }
+    }
+
+    const claudeCommand = await lstat(
+      path.join(outDir, "claude", ".claude", "commands", "comments.md"),
+    )
+    assert.equal(claudeCommand.isSymbolicLink(), true)
+
+    const transformedCommands = [
+      ["opencode", "commands", "cubic-comments.md"],
+      ["codex", "prompts", "cubic-comments.md"],
+      ["cursor", "commands", "cubic-comments.md"],
+      ["droid", "commands", "cubic-comments.md"],
+      ["pi", "prompts", "cubic-comments.md"],
+      ["gemini", "commands", "cubic-comments.toml"],
+      ["universal", ".agents", "commands", "cubic-comments.md"],
+    ]
+    for (const commandPath of transformedCommands) {
+      const stat = await lstat(path.join(outDir, ...commandPath))
+      assert.equal(stat.isSymbolicLink(), false, commandPath.join("/"))
+    }
   })
 
   it("each NDJSON line is valid JSON parseable by jq", async () => {
@@ -180,7 +337,7 @@ describe("install text mode (backward compatibility)", () => {
 
     assert.ok(stdout.includes("Installing cubic skills"), "has progress text")
     assert.ok(
-      stdout.includes("claude: 1 skill, 1 command"),
+      stdout.includes("claude: 5 skills, 5 commands"),
       "has target summary",
     )
     assert.ok(stdout.includes("Done!"), "has completion message")
