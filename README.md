@@ -201,6 +201,12 @@ node dist/index.js stripe create-subscription-plan --seller acme
 node dist/index.js stripe attach-balance-payment-method --seller acme
 node dist/index.js stripe create-subscription --seller acme
 node dist/index.js stripe handle-webhooks --port 4242
+
+# Workbench-style Inspector: view an API object, related ids, and events
+node dist/index.js stripe inspect cus_...
+# Shell / API Explorer: edit objects (test-mode keys; live mutations blocked by default)
+node dist/index.js stripe update cus_... --params '{"metadata":{"note":"from-cli"}}'
+node dist/index.js stripe api --method POST --path /v1/customers/cus_... --params '{"name":"Ada"}'
 ```
 
 Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).

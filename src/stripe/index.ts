@@ -31,3 +31,15 @@ export {
   CHECKOUT_COMPLETED_EVENT,
   INVOICE_PAYMENT_SUCCEEDED_EVENT,
 } from "./webhooks.js"
+export {
+  inspectObject,
+  apiExplore,
+  updateObject,
+  resolveResource,
+  resourcePath,
+  collectRelatedObjectIds,
+  workbenchInspectorUrl,
+  type InspectResult,
+  type ApiExploreInput,
+  type ResourceDescriptor,
+} from "./inspector.js"

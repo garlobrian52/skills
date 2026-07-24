@@ -26,6 +26,9 @@ describe("stripe CLI help", () => {
     assert.match(stdout, /attach-balance-payment-method/)
     assert.match(stdout, /create-subscription/)
     assert.match(stdout, /handle-webhooks/)
+    assert.match(stdout, /inspect/)
+    assert.match(stdout, /\bapi\b/)
+    assert.match(stdout, /update/)
     assert.doesNotMatch(stdout, /chapter/i)
   })
 })
@@ -315,6 +318,162 @@ describe("stripe env loading", () => {
 
     if (prevCurrency === undefined) delete process.env.CURRENCY
     else process.env.CURRENCY = prevCurrency
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
+  })
+})
+
+describe("stripe workbench inspector", () => {
+  let stripeMod
+
+  before(async () => {
+    stripeMod = await import(
+      pathToFileURL(path.join(ROOT, "dist", "stripe", "index.js")).href
+    )
+  })
+
+  it("resolves common object id prefixes", () => {
+    assert.equal(stripeMod.resolveResource("cus_abc").resource, "customer")
+    assert.equal(stripeMod.resolveResource("pi_abc").resource, "payment_intent")
+    assert.equal(stripeMod.resolveResource("sub_abc").resource, "subscription")
+    assert.equal(stripeMod.resolveResource("acct_abc").resource, "account")
+    assert.equal(stripeMod.resolveResource("acct_abc").api, "v2")
+    assert.equal(
+      stripeMod.resourcePath(stripeMod.resolveResource("cus_abc"), "cus_abc"),
+      "/v1/customers/cus_abc",
+    )
+    assert.equal(
+      stripeMod.resourcePath(stripeMod.resolveResource("acct_1"), "acct_1"),
+      "/v2/core/accounts/acct_1",
+    )
+  })
+
+  it("builds a related-object data map from nested ids", () => {
+    const obj = {
+      id: "pi_root",
+      customer: "cus_related",
+      invoice: "in_related",
+      metadata: { note: "mentions sub_also but not as id field" },
+      charges: { data: [{ id: "ch_nested", payment_intent: "pi_root" }] },
+    }
+    const map = stripeMod.collectRelatedObjectIds(obj, "pi_root")
+    const ids = map.map((r) => r.id).sort()
+    assert.deepEqual(ids, ["ch_nested", "cus_related", "in_related", "sub_also"])
+    assert.ok(map.some((r) => r.resource === "customer" && r.id === "cus_related"))
+  })
+
+  it("inspects an object with mocked retrieve + events", async () => {
+    const prevKey = process.env.STRIPE_SECRET_KEY
+    process.env.STRIPE_SECRET_KEY = "sk_test_inspector"
+
+    const stripe = {
+      v2: { core: { accounts: { retrieve: async () => assert.fail("not acct") } } },
+      rawRequest: async (method, path) => {
+        assert.equal(method, "GET")
+        assert.equal(path, "/v1/customers/cus_inspect")
+        return {
+          id: "cus_inspect",
+          object: "customer",
+          email: "a@example.com",
+          default_source: null,
+          invoice_settings: { default_payment_method: "pm_default" },
+        }
+      },
+      events: {
+        list: async () => ({
+          data: [
+            {
+              id: "evt_1",
+              type: "customer.updated",
+              created: 1,
+              request: { id: "req_abc" },
+              data: { object: { id: "cus_inspect" } },
+            },
+            {
+              id: "evt_other",
+              type: "charge.succeeded",
+              created: 2,
+              request: { id: "req_other" },
+              data: { object: { id: "ch_other" } },
+            },
+          ],
+        }),
+      },
+    }
+
+    const result = await stripeMod.inspectObject("cus_inspect", {}, stripe)
+    assert.equal(result.resource, "customer")
+    assert.equal(result.object.id, "cus_inspect")
+    assert.equal(result.events.length, 1)
+    assert.equal(result.events[0].id, "evt_1")
+    assert.deepEqual(result.logs.requestIds, ["req_abc"])
+    assert.equal(result.logs.availableViaApi, false)
+    assert.match(result.workbenchUrl, /workbench\/inspector/)
+    assert.ok(result.dataMap.some((r) => r.id === "pm_default"))
+    assert.equal(result.editHint.testMode, true)
+
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
+  })
+
+  it("blocks live-mode mutations in apiExplore unless opted in", async () => {
+    const prevKey = process.env.STRIPE_SECRET_KEY
+    process.env.STRIPE_SECRET_KEY = "sk_live_inspector"
+
+    const stripe = {
+      rawRequest: async () => ({ id: "cus_x" }),
+    }
+
+    await assert.rejects(
+      () =>
+        stripeMod.apiExplore(
+          {
+            method: "POST",
+            path: "/v1/customers/cus_x",
+            params: { name: "Nope" },
+          },
+          stripe,
+        ),
+      /live-mode/,
+    )
+
+    const ok = await stripeMod.apiExplore(
+      {
+        method: "POST",
+        path: "/v1/customers/cus_x",
+        params: { name: "Allowed" },
+        allowLiveMutations: true,
+      },
+      stripe,
+    )
+    assert.equal(ok.method, "POST")
+    assert.equal(ok.result.id, "cus_x")
+
+    if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
+    else process.env.STRIPE_SECRET_KEY = prevKey
+  })
+
+  it("updates objects via POST in test mode", async () => {
+    const prevKey = process.env.STRIPE_SECRET_KEY
+    process.env.STRIPE_SECRET_KEY = "sk_test_update"
+
+    const stripe = {
+      rawRequest: async (method, path, params) => {
+        assert.equal(method, "POST")
+        assert.equal(path, "/v1/products/prod_1")
+        assert.equal(params.name, "Renamed")
+        return { id: "prod_1", name: "Renamed" }
+      },
+    }
+
+    const result = await stripeMod.updateObject(
+      "prod_1",
+      { name: "Renamed" },
+      {},
+      stripe,
+    )
+    assert.equal(result.result.name, "Renamed")
+
     if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
     else process.env.STRIPE_SECRET_KEY = prevKey
   })
