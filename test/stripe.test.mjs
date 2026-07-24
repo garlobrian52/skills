@@ -25,6 +25,8 @@ describe("stripe CLI help", () => {
     assert.match(stdout, /create-subscription-plan/)
     assert.match(stdout, /attach-balance-payment-method/)
     assert.match(stdout, /create-subscription/)
+    assert.match(stdout, /inspect-object/)
+    assert.match(stdout, /api-request/)
     assert.match(stdout, /handle-webhooks/)
     assert.doesNotMatch(stdout, /chapter/i)
   })
@@ -317,5 +319,148 @@ describe("stripe env loading", () => {
     else process.env.CURRENCY = prevCurrency
     if (prevKey === undefined) delete process.env.STRIPE_SECRET_KEY
     else process.env.STRIPE_SECRET_KEY = prevKey
+  })
+})
+
+describe("stripe workbench inspect + api-request", () => {
+  let stripeMod
+
+  before(async () => {
+    stripeMod = await import(
+      pathToFileURL(path.join(ROOT, "dist", "stripe", "index.js")).href
+    )
+  })
+
+  it("resolves object id prefixes to API paths", () => {
+    assert.deepEqual(stripeMod.resolveObjectPath("pi_abc"), {
+      type: "payment_intent",
+      path: "/v1/payment_intents/pi_abc",
+      api: "v1",
+    })
+    assert.deepEqual(stripeMod.resolveObjectPath("acct_123"), {
+      type: "account",
+      path: "/v2/core/accounts/acct_123",
+      api: "v2",
+    })
+    assert.deepEqual(stripeMod.resolveObjectPath("cs_test_xyz"), {
+      type: "checkout_session",
+      path: "/v1/checkout/sessions/cs_test_xyz",
+      api: "v1",
+    })
+    assert.throws(() => stripeMod.resolveObjectPath("unknown_1"), /Unrecognized/)
+  })
+
+  it("builds a related-object data map from nested JSON", () => {
+    const map = stripeMod.buildDataMap(
+      {
+        id: "pi_root",
+        object: "payment_intent",
+        customer: "cus_1",
+        payment_method: "pm_1",
+        latest_charge: {
+          id: "ch_1",
+          invoice: "in_1",
+        },
+        metadata: { note: "not-an-id" },
+      },
+      "pi_root",
+    )
+    const byPath = Object.fromEntries(map.map((e) => [e.path, e]))
+    assert.equal(byPath.customer.id, "cus_1")
+    assert.equal(byPath.customer.type, "customer")
+    assert.equal(byPath.payment_method.id, "pm_1")
+    assert.equal(byPath["latest_charge.id"].id, "ch_1")
+    assert.equal(byPath["latest_charge.invoice"].id, "in_1")
+    assert.ok(!map.some((e) => e.id === "pi_root"))
+  })
+
+  it("parses Shell-style key=value params", () => {
+    assert.deepEqual(
+      stripeMod.parseParamPairs(["amount=2000", "confirm=true", "foo=bar"]),
+      { amount: 2000, confirm: true, foo: "bar" },
+    )
+    assert.throws(() => stripeMod.parseParamPairs(["novalue"]), /Expected key=value/)
+  })
+
+  it("inspect-object retrieves data, events, and logs via mocked Stripe client", async () => {
+    const calls = []
+    const stripe = {
+      rawRequest: async (method, path, params, options) => {
+        calls.push({ method, path, params, options })
+        if (path.startsWith("/v1/payment_intents/")) {
+          return {
+            id: "pi_test_1",
+            object: "payment_intent",
+            customer: "cus_related",
+            status: "succeeded",
+          }
+        }
+        if (path.startsWith("/v1/events?")) {
+          assert.match(path, /related_object=pi_test_1/)
+          return {
+            data: [
+              {
+                id: "evt_1",
+                type: "payment_intent.succeeded",
+                created: 1_700_000_000,
+                livemode: false,
+                request: { id: "req_abc" },
+              },
+            ],
+          }
+        }
+        throw new Error(`unexpected path ${path}`)
+      },
+      events: {
+        list: async () => ({ data: [] }),
+      },
+    }
+
+    const result = await stripeMod.inspectObject(
+      { objectId: "pi_test_1", stripeAccount: "acct_conn" },
+      stripe,
+    )
+    assert.equal(result.objectType, "payment_intent")
+    assert.equal(result.apiPath, "/v1/payment_intents/pi_test_1")
+    assert.equal(result.data.status, "succeeded")
+    assert.equal(result.dataMap[0].id, "cus_related")
+    assert.equal(result.events.length, 1)
+    assert.equal(result.events[0].type, "payment_intent.succeeded")
+    assert.equal(result.logs[0].requestId, "req_abc")
+    assert.match(result.workbench.inspector, /workbench\/inspector/)
+    assert.equal(calls[0].options.stripeAccount, "acct_conn")
+  })
+
+  it("api-request POSTs edits and encodes GET query params", async () => {
+    const calls = []
+    const stripe = {
+      rawRequest: async (method, path, params) => {
+        calls.push({ method, path, params })
+        if (method === "POST") {
+          return { id: "cus_edited", metadata: params.metadata }
+        }
+        return { object: "list", data: [], path }
+      },
+    }
+
+    const posted = await stripeMod.apiRequest(
+      {
+        method: "POST",
+        path: "/v1/customers/cus_edited",
+        params: { metadata: { note: "from-cli" } },
+      },
+      stripe,
+    )
+    assert.equal(posted.data.id, "cus_edited")
+    assert.match(posted.inspectHint, /inspect-object --id cus_edited/)
+    assert.deepEqual(calls[0].params, { metadata: { note: "from-cli" } })
+
+    await stripeMod.apiRequest(
+      { method: "GET", path: "/v1/events", params: { limit: 5 } },
+      stripe,
+    )
+    assert.equal(calls[1].method, "GET")
+    assert.match(calls[1].path, /\/v1\/events\?limit=5/)
+    assert.equal(calls[1].params, undefined)
   })
 })
