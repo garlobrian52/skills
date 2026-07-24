@@ -30,6 +30,15 @@ describe("stripe CLI help", () => {
     assert.match(stdout, /handle-webhooks/)
     assert.doesNotMatch(stdout, /chapter/i)
   })
+
+  it("accepts a positional object ID for inspect-object", async () => {
+    const { stdout } = await exec("node", [CLI, "stripe", "inspect-object", "--help"])
+    assert.match(stdout, /inspect-object/)
+    assert.match(stdout, /OBJECT ID|object ID|positional/i)
+    // Usage should show a positional slot, not only --id
+    assert.match(stdout, /inspect-object.*id|USAGE stripe inspect-object/i)
+    assert.doesNotMatch(stdout, /--id \(required\)/)
+  })
 })
 
 describe("stripe store + webhook handlers", () => {
@@ -452,7 +461,8 @@ describe("stripe workbench inspect + api-request", () => {
       stripe,
     )
     assert.equal(posted.data.id, "cus_edited")
-    assert.match(posted.inspectHint, /inspect-object --id cus_edited/)
+    assert.match(posted.inspectHint, /inspect-object cus_edited/)
+    assert.doesNotMatch(posted.inspectHint, /--id/)
     assert.deepEqual(calls[0].params, { metadata: { note: "from-cli" } })
 
     await stripeMod.apiRequest(

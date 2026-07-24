@@ -70,7 +70,7 @@ export async function apiRequest(
     path,
     data,
     inspectHint: returnedId
-      ? `node dist/index.js stripe inspect-object --id ${returnedId}`
+      ? `node dist/index.js stripe inspect-object ${returnedId}`
       : null,
   }
 }

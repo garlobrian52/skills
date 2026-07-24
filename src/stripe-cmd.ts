@@ -319,8 +319,8 @@ const inspectObjectCmd = defineCommand({
   },
   args: {
     id: {
-      type: "string",
-      description: "Stripe object id (e.g. pi_…, cus_…, sub_…, acct_…)",
+      type: "positional",
+      description: "Stripe object ID (e.g. pi_…, cus_…, sub_…, acct_…)",
       required: true,
     },
     path: {
@@ -344,8 +344,12 @@ const inspectObjectCmd = defineCommand({
   },
   async run({ args }) {
     await withEnv(async () => {
+      const objectId = String(args.id || "").trim()
+      if (!objectId) {
+        throw new Error("Object ID is required (e.g. stripe inspect-object pi_…)")
+      }
       const result = await inspectObject({
-        objectId: args.id,
+        objectId,
         path: args.path,
         stripeAccount: args["stripe-account"],
         eventsLimit: args["events-limit"]
@@ -369,16 +373,16 @@ const apiRequestCmd = defineCommand({
       "Workbench Shell / API Explorer: run GET, POST, or DELETE against the Stripe API to view or edit objects",
   },
   args: {
+    path: {
+      type: "positional",
+      description:
+        "API path (/v1/…) or object ID (resolved to a path like Workbench Explorer)",
+      required: true,
+    },
     method: {
       type: "string",
       description: "HTTP method: GET, POST, or DELETE",
       default: "GET",
-    },
-    path: {
-      type: "string",
-      description:
-        "API path (/v1/…) or object id (resolved to a path like Workbench Explorer)",
-      required: true,
     },
     param: {
       type: "string",
@@ -395,6 +399,12 @@ const apiRequestCmd = defineCommand({
   },
   async run({ args }) {
     await withEnv(async () => {
+      const pathArg = String(args.path || "").trim()
+      if (!pathArg) {
+        throw new Error(
+          "Path or object ID is required (e.g. stripe api-request pi_…)",
+        )
+      }
       let params = parseParamPairs(
         args.param as string | string[] | undefined,
       )
@@ -416,7 +426,7 @@ const apiRequestCmd = defineCommand({
       }
       const result = await apiRequest({
         method,
-        path: args.path,
+        path: pathArg,
         params: Object.keys(params).length ? params : undefined,
         stripeAccount: args["stripe-account"],
       })
