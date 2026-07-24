@@ -14,6 +14,9 @@ import {
   loadEnvFile,
   loadStore,
   optionalEnv,
+  inspectObject,
+  apiExplore,
+  updateObject,
 } from "./stripe/index.js"
 
 async function withEnv<T>(fn: () => Promise<T>): Promise<T> {
@@ -428,11 +431,174 @@ const handleWebhooksCmd = defineCommand({
   },
 })
 
+const inspectCmd = defineCommand({
+  meta: {
+    name: "inspect",
+    description:
+      "Workbench Inspector: retrieve an API object plus related data map, events, and log links",
+  },
+  args: {
+    id: {
+      type: "positional",
+      description: "Stripe object id (cus_, pi_, sub_, acct_, cs_, …)",
+      required: true,
+    },
+    path: {
+      type: "string",
+      description: "Optional API path override (e.g. /v1/customers/{id})",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Stripe-Account header for connected-account requests",
+    },
+    "event-limit": {
+      type: "string",
+      description: "Max recent events to scan for related activity (default 50)",
+      default: "50",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const result = await inspectObject(String(args.id), {
+        pathOverride: args.path,
+        stripeAccount: args["stripe-account"],
+        eventLimit: Number(args["event-limit"]) || 50,
+      })
+      printJson({ ok: true, action: "inspect", ...result })
+    })
+  },
+})
+
+const apiCmd = defineCommand({
+  meta: {
+    name: "api",
+    description:
+      "Workbench Shell / API Explorer: run a raw Stripe API request (GET/POST/DELETE)",
+  },
+  args: {
+    method: {
+      type: "string",
+      description: "HTTP method: GET, POST, or DELETE",
+      default: "GET",
+    },
+    path: {
+      type: "string",
+      description: "API path (e.g. /v1/customers/cus_xxx)",
+      required: true,
+    },
+    params: {
+      type: "string",
+      description: 'JSON object of params (POST body, or query for GET/DELETE)',
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Stripe-Account header for connected-account requests",
+    },
+    "allow-live-mutations": {
+      type: "boolean",
+      description:
+        "Allow POST/DELETE with a live-mode key (default: blocked, like Workbench)",
+      default: false,
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      let params: Record<string, unknown> | undefined
+      if (args.params) {
+        try {
+          params = JSON.parse(args.params) as Record<string, unknown>
+        } catch {
+          throw new Error(`Invalid --params JSON: ${args.params}`)
+        }
+        if (!params || typeof params !== "object" || Array.isArray(params)) {
+          throw new Error("--params must be a JSON object")
+        }
+      }
+      const method = String(args.method || "GET").toUpperCase()
+      if (method !== "GET" && method !== "POST" && method !== "DELETE") {
+        throw new Error(`Unsupported --method ${args.method}`)
+      }
+      const { method: usedMethod, path, result } = await apiExplore({
+        method,
+        path: args.path,
+        params,
+        stripeAccount: args["stripe-account"],
+        allowLiveMutations: Boolean(args["allow-live-mutations"]),
+      })
+      printJson({
+        ok: true,
+        action: "api",
+        method: usedMethod,
+        path,
+        result,
+      })
+    })
+  },
+})
+
+const updateCmd = defineCommand({
+  meta: {
+    name: "update",
+    description:
+      "Edit an API object via POST (API Explorer edit flow). Test-mode keys only by default.",
+  },
+  args: {
+    id: {
+      type: "positional",
+      description: "Stripe object id to update",
+      required: true,
+    },
+    params: {
+      type: "string",
+      description: 'JSON object of fields to update (e.g. \'{"metadata":{"k":"v"}}\')',
+      required: true,
+    },
+    path: {
+      type: "string",
+      description: "Optional API path override",
+    },
+    "stripe-account": {
+      type: "string",
+      description: "Stripe-Account header for connected-account requests",
+    },
+    "allow-live-mutations": {
+      type: "boolean",
+      description: "Allow updates with a live-mode key",
+      default: false,
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      let params: Record<string, unknown>
+      try {
+        params = JSON.parse(args.params) as Record<string, unknown>
+      } catch {
+        throw new Error(`Invalid --params JSON: ${args.params}`)
+      }
+      if (!params || typeof params !== "object" || Array.isArray(params)) {
+        throw new Error("--params must be a JSON object")
+      }
+      const { method, path, result } = await updateObject(String(args.id), params, {
+        pathOverride: args.path,
+        stripeAccount: args["stripe-account"],
+        allowLiveMutations: Boolean(args["allow-live-mutations"]),
+      })
+      printJson({
+        ok: true,
+        action: "update",
+        method,
+        path,
+        result,
+      })
+    })
+  },
+})
+
 export default defineCommand({
   meta: {
     name: "stripe",
     description:
-      "Stripe Accounts v2: onboard connected accounts, accept embedded payments, charge subscriptions",
+      "Stripe Accounts v2 + Workbench Inspector: onboard accounts, payments, inspect/edit API objects",
   },
   subCommands: {
     "create-account": createAccountCmd,
@@ -443,5 +609,8 @@ export default defineCommand({
     "create-subscription": createSubscriptionCmd,
     "show-status": showStatusCmd,
     "handle-webhooks": handleWebhooksCmd,
+    inspect: inspectCmd,
+    api: apiCmd,
+    update: updateCmd,
   },
 })
