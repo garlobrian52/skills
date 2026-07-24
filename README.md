@@ -203,24 +203,98 @@ node dist/index.js stripe create-subscription --seller acme
 node dist/index.js stripe handle-webhooks --port 4242
 ```
 
-Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).
+Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`). Use `stripe show-status [--seller <id>]` to print them when debugging seller wiring.
 
 ### Workbench Inspector + API Explorer
 
-Peek under the hood of any Stripe API object (data map, related events, and request summaries), then edit it with Shell-style requests — the same workflow as [Dashboard Workbench](https://docs.stripe.com/workbench):
+Peek under the hood of any Stripe API object (data map, related events, and request summaries), then edit it with Shell-style requests — the same workflow as [Dashboard Workbench](https://docs.stripe.com/workbench). Implementation lives in `src/stripe/inspect.ts`, `src/stripe/object-paths.ts`, and `src/stripe/request.ts`, wired through `src/stripe-cmd.ts`.
+
+| Command | Workbench equivalent | Intent |
+| --- | --- | --- |
+| `stripe inspect-object --id <obj>` | Inspector | Retrieve JSON, related-object data map, related events, request-id summaries, and Dashboard deep links |
+| `stripe api-request --method … --path …` | Shell / API Explorer | `GET` / `POST` / `DELETE` against a path or object id (prefer test mode for writes) |
 
 ```bash
-# Inspector: retrieve object JSON + related ids/events/logs
+# Inspector: object JSON + related ids / events / request summaries
 node dist/index.js stripe inspect-object --id pi_...
-node dist/index.js stripe inspect-object --id cus_... --related
+node dist/index.js stripe inspect-object --id cus_... --related --events-limit 5
+node dist/index.js stripe inspect-object --id acct_... --path /v2/core/accounts/acct_...
 
-# API Explorer / Shell: GET, POST, or DELETE (sandbox / test mode)
+# Connected-account objects (Stripe-Account header)
+node dist/index.js stripe inspect-object --id cus_... --stripe-account acct_...
+
+# API Explorer / Shell: GET, POST, or DELETE
 node dist/index.js stripe api-request --method GET --path pi_...
 node dist/index.js stripe api-request --method POST --path /v1/customers/cus_... \
   --param "metadata[note]=from-cli"
+node dist/index.js stripe api-request --method POST --path /v1/customers/cus_... \
+  --json-body '{"description":"Updated from CLI"}'
 ```
 
-Deep links in the inspect output open the same object in Dashboard Workbench Inspector, Logs, Events, and Shell.
+#### Inspect flags
+
+| Flag | Purpose |
+| --- | --- |
+| `--id` | Stripe object id (required) |
+| `--path` | Absolute API path override when prefix resolution is wrong or unsupported |
+| `--stripe-account` | Connected account id for the `Stripe-Account` header |
+| `--events-limit` | Max related events (default `20`, clamped to 1–100) |
+| `--related` | Also `GET` each related id one level deep (at most 10; failures are skipped) |
+
+#### Inspect output
+
+`inspect-object` prints JSON with:
+
+- `data` — retrieved Stripe payload
+- `dataMap` — `{ path, id, type }` entries for nested Stripe ids (root id excluded)
+- `events` — related events via `/v1/events?related_object=…`, with a recent-events scan fallback if that query fails
+- `logs` — request-id summaries derived from event `request` metadata (Dashboard Workbench Logs are not fully available via the public API)
+- `related` — optional map of retrieved related objects when `--related` is set
+- `workbench.inspector` / `shell` / `logs` / `events` — Dashboard Workbench deep links
+- `apiPath` / `objectType` — resolved path and type label
+
+Successful `api-request` responses that return an `id` include `inspectHint` with a follow-up `inspect-object` command.
+
+#### Object id → path resolution
+
+Both commands resolve bare object ids to REST paths (longest prefix wins). Unknown prefixes fail with a hint to pass an explicit `--path`.
+
+| Prefix | Type | Path |
+| --- | --- | --- |
+| `acct_` | account | `/v2/core/accounts/{id}` |
+| `cus_` | customer | `/v1/customers/{id}` |
+| `pi_` | payment_intent | `/v1/payment_intents/{id}` |
+| `ch_` / `py_` | charge | `/v1/charges/{id}` |
+| `cs_test_` / `cs_live_` / `cs_` | checkout_session | `/v1/checkout/sessions/{id}` |
+| `sub_` | subscription | `/v1/subscriptions/{id}` |
+| `si_` | subscription_item | `/v1/subscription_items/{id}` |
+| `in_` | invoice | `/v1/invoices/{id}` |
+| `il_` | invoice_item | `/v1/invoiceitems/{id}` |
+| `price_` / `prod_` | price / product | `/v1/prices/{id}` / `/v1/products/{id}` |
+| `pm_` | payment_method | `/v1/payment_methods/{id}` |
+| `seti_` | setup_intent | `/v1/setup_intents/{id}` |
+| `evt_` | event | `/v1/events/{id}` |
+| `re_` / `dp_` / `po_` / `tr_` | refund / dispute / payout / transfer | matching `/v1/…` collections |
+| `txn_` / `qr_` / `src_` / `tok_` / `file_` / `link_` / `card_` | balance_transaction / quote / source / token / file / file_link / issuing card | matching `/v1/…` collections |
+
+#### `api-request` params
+
+- `--method` — `GET` (default), `POST`, or `DELETE` (case-insensitive)
+- `--path` — absolute path (`/v1/…`, `v1/…`) or bare object id
+- `--param key=value` — repeatable form fields; values coerce `true` / `false` / `null` / numbers; nested structures are **not** built from dotted keys — use `--json-body` instead
+- `--json-body '{…}'` — JSON object merged into params (must be an object, not an array)
+- `--stripe-account` — connected-account header
+
+`POST` sends params as the request body. `GET` / `DELETE` append params as a query string (`rawRequest` only accepts a body on `POST`).
+
+#### Common pitfalls
+
+- Build first (`npm run build`) so `node dist/index.js stripe …` picks up these commands.
+- Prefer a **test** secret key for writes; this CLI does not block live-mode `POST` / `DELETE`.
+- Connected-account objects need `--stripe-account`; platform-scoped inspect against a connected object will 404 or return the wrong resource. There is no `--seller` lookup on these two commands — resolve the account id via `show-status` first.
+- Unrecognized id prefixes need `--path` (inspect) or an absolute `--path` (api-request).
+- `logs` are event-derived request summaries, not full Workbench request payloads.
+- `--related` silently skips related ids that cannot be retrieved with the current key / account.
 
 ## License
 
