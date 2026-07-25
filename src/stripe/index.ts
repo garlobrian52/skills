@@ -14,11 +14,13 @@ export {
   type ConnectedAccountRecord,
   type StripeStoreData,
 } from "./store.js"
+export { createConnectedAccount, createAccountOnboardingLink } from "./accounts.js"
 export {
-  createConnectedAccount,
-  createAccountOnboardingLink,
-} from "./accounts.js"
-export { createEmbeddedCheckoutSession } from "./checkout.js"
+  createCheckoutSession,
+  createDirectChargeCheckoutSession,
+  createEmbeddedCheckoutSession,
+} from "./checkout.js"
+export { createProduct } from "./products.js"
 export {
   createSubscriptionPlan,
   attachBalancePaymentMethod,

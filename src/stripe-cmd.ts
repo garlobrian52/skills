@@ -4,8 +4,10 @@ import {
   attachBalancePaymentMethod,
   createAccountOnboardingLink,
   createConnectedAccount,
-  createEmbeddedCheckoutSession,
+  createCheckoutSession,
+  createDirectChargeCheckoutSession,
   createPlatformSubscription,
+  createProduct,
   createSubscriptionPlan,
   constructWebhookEvent,
   defaultStorePath,
@@ -156,29 +158,26 @@ const createAccountLinkCmd = defineCommand({
   },
 })
 
-const createCheckoutSessionCmd = defineCommand({
+const createProductCmd = defineCommand({
   meta: {
-    name: "create-checkout-session",
+    name: "create-product",
     description:
-      "Create a Checkout Session on the connected account with an application fee",
+      "Create a platform product with a one-time default price for Checkout",
   },
   args: {
     seller: {
       type: "string",
-      description: "Local seller id",
+      description: "Local seller id to associate with the product and price",
       required: true,
     },
-    "success-url": {
+    name: {
       type: "string",
-      description: "URL to redirect after successful payment",
+      description: "Product name",
+      default: "Example Product",
     },
     "unit-amount": {
       type: "string",
-      description: "Amount in the smallest currency unit (default 100000)",
-    },
-    "application-fee": {
-      type: "string",
-      description: "Application fee amount (default 123)",
+      description: "Price amount in the smallest currency unit (default 2000)",
     },
     currency: {
       type: "string",
@@ -191,23 +190,113 @@ const createCheckoutSessionCmd = defineCommand({
   },
   async run({ args }) {
     await withEnv(async () => {
-      const { record, session } = await createEmbeddedCheckoutSession({
+      const { product, priceId, record } = await createProduct({
         sellerId: args.seller,
-        successUrl: args["success-url"],
+        name: args.name,
         unitAmount: args["unit-amount"]
           ? Number(args["unit-amount"])
-          : undefined,
-        applicationFeeAmount: args["application-fee"]
-          ? Number(args["application-fee"])
           : undefined,
         currency: args.currency,
         storePath: args.store,
       })
       printJson({
         ok: true,
-        action: "create-checkout-session",
+        action: "create-product",
         sellerId: record.sellerId,
-        accountId: record.accountId,
+        productId: product.id,
+        default_price: priceId,
+        priceId,
+      })
+    })
+  },
+})
+
+const createCheckoutSessionCmd = defineCommand({
+  meta: {
+    name: "create-checkout-session",
+    description:
+      "Create a Checkout Session for a one-time payment (platform account)",
+  },
+  args: {
+    seller: {
+      type: "string",
+      description: "Local seller id",
+      required: true,
+    },
+    price: {
+      type: "string",
+      description: "Price id override (defaults to stored checkout price id)",
+    },
+    "success-url": {
+      type: "string",
+      description: "URL to redirect after successful payment",
+    },
+    "cancel-url": {
+      type: "string",
+      description: "URL to redirect when the customer cancels checkout",
+    },
+    "direct-charge": {
+      type: "boolean",
+      description:
+        "Create a direct charge on the connected account with inline product data",
+      default: false,
+    },
+    "unit-amount": {
+      type: "string",
+      description: "Direct charge: amount in the smallest currency unit",
+    },
+    "application-fee": {
+      type: "string",
+      description: "Direct charge: application fee amount (default 123)",
+    },
+    currency: {
+      type: "string",
+      description: "Currency code (or set CURRENCY)",
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      if (args["direct-charge"]) {
+        const { record, session } = await createDirectChargeCheckoutSession({
+          sellerId: args.seller,
+          successUrl: args["success-url"],
+          unitAmount: args["unit-amount"]
+            ? Number(args["unit-amount"])
+            : undefined,
+          applicationFeeAmount: args["application-fee"]
+            ? Number(args["application-fee"])
+            : undefined,
+          currency: args.currency,
+          storePath: args.store,
+        })
+        printJson({
+          ok: true,
+          action: "create-checkout-session",
+          flow: "direct-charge",
+          sellerId: record.sellerId,
+          accountId: record.accountId,
+          checkoutSessionId: session.id,
+          url: session.url,
+        })
+        return
+      }
+
+      const { record, session } = await createCheckoutSession({
+        sellerId: args.seller,
+        priceId: args.price,
+        successUrl: args["success-url"],
+        cancelUrl: args["cancel-url"],
+        storePath: args.store,
+      })
+      printJson({
+        ok: true,
+        action: "create-checkout-session",
+        flow: "one-time-payment",
+        sellerId: record.sellerId,
         checkoutSessionId: session.id,
         url: session.url,
       })
@@ -641,6 +730,7 @@ export default defineCommand({
   subCommands: {
     "create-account": createAccountCmd,
     "create-account-link": createAccountLinkCmd,
+    "create-product": createProductCmd,
     "create-checkout-session": createCheckoutSessionCmd,
     "create-subscription-plan": createSubscriptionPlanCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,

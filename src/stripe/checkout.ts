@@ -3,7 +3,19 @@ import { getStripeClient } from "./client.js"
 import { optionalEnv } from "./env.js"
 import { requireAccount, upsertAccount, type ConnectedAccountRecord } from "./store.js"
 
+const DEFAULT_CHECKOUT_SUCCESS_URL =
+  "https://dashboard.stripe.com/workbench/blueprints/one-time-payment/checkout-chapter?confirmation-redirect=create-checkout-session"
+const DEFAULT_CHECKOUT_CANCEL_URL = DEFAULT_CHECKOUT_SUCCESS_URL
+
 export interface CreateCheckoutSessionInput {
+  sellerId: string
+  priceId?: string
+  successUrl?: string
+  cancelUrl?: string
+  storePath?: string
+}
+
+export interface CreateDirectChargeCheckoutSessionInput {
   sellerId: string
   successUrl?: string
   productName?: string
@@ -14,11 +26,49 @@ export interface CreateCheckoutSessionInput {
 }
 
 /**
+ * Create a Checkout Session on the platform account for a one-time payment
+ * using a pre-created price id.
+ */
+export async function createCheckoutSession(
+  input: CreateCheckoutSessionInput,
+  stripe: Stripe = getStripeClient(),
+): Promise<{ record: ConnectedAccountRecord; session: Stripe.Checkout.Session }> {
+  const record = await requireAccount(input.sellerId, input.storePath)
+
+  const priceId = input.priceId ?? record.checkoutPriceId
+  if (!priceId) {
+    throw new Error(
+      `Seller "${input.sellerId}" has no checkout price id. Run create-product first.`,
+    )
+  }
+
+  const successUrl =
+    input.successUrl ??
+    optionalEnv("STRIPE_CHECKOUT_SUCCESS_URL", DEFAULT_CHECKOUT_SUCCESS_URL)
+  const cancelUrl =
+    input.cancelUrl ??
+    optionalEnv("STRIPE_CHECKOUT_CANCEL_URL", DEFAULT_CHECKOUT_CANCEL_URL)
+
+  const session = await stripe.checkout.sessions.create({
+    line_items: [{ price: priceId, quantity: 1 }],
+    mode: "payment",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  })
+
+  record.checkoutSessionId = session.id
+  record.checkoutSessionUrl = session.url
+  record.checkoutCompleted = false
+  const saved = await upsertAccount(record, input.storePath)
+  return { record: saved, session }
+}
+
+/**
  * Create a Checkout Session on the connected account (direct charge) with an
  * application fee transferred to the platform.
  */
-export async function createEmbeddedCheckoutSession(
-  input: CreateCheckoutSessionInput,
+export async function createDirectChargeCheckoutSession(
+  input: CreateDirectChargeCheckoutSessionInput,
   stripe: Stripe = getStripeClient(),
 ): Promise<{ record: ConnectedAccountRecord; session: Stripe.Checkout.Session }> {
   const record = await requireAccount(input.sellerId, input.storePath)
@@ -73,3 +123,6 @@ export async function createEmbeddedCheckoutSession(
   const saved = await upsertAccount(record, input.storePath)
   return { record: saved, session }
 }
+
+/** @deprecated Use createDirectChargeCheckoutSession */
+export const createEmbeddedCheckoutSession = createDirectChargeCheckoutSession
