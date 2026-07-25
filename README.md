@@ -188,19 +188,26 @@ skills/
 
 ## Stripe Accounts v2 (platform payments)
 
-The CLI also includes Stripe Accounts v2 helpers for onboarding connected sellers, accepting direct charges with an application fee, and charging platform subscriptions from the connected account balance:
+The CLI includes Stripe helpers under `src/stripe/` for Accounts v2 onboarding, the one-time Checkout blueprint (platform product + session), connected-account direct charges with an application fee, and platform subscriptions billed from the connected account balance.
 
 ```bash
 cp .env.example .env
 # Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY from https://dashboard.stripe.com/apikeys
 
+npm run build
+
+# One-time payment Checkout blueprint (platform account)
+node dist/index.js stripe create-product --seller acme
+node dist/index.js stripe create-checkout-session --seller acme
+node dist/index.js stripe handle-webhooks --port 4242
+
+# Connected-account onboarding + subscription sequence
 node dist/index.js stripe create-account --seller acme
 node dist/index.js stripe create-account-link --seller acme
-node dist/index.js stripe create-checkout-session --seller acme
+node dist/index.js stripe create-checkout-session --seller acme --direct-charge
 node dist/index.js stripe create-subscription-plan --seller acme
 node dist/index.js stripe attach-balance-payment-method --seller acme
 node dist/index.js stripe create-subscription --seller acme
-node dist/index.js stripe handle-webhooks --port 4242
 
 # Workbench-style debugging (Inspector / API Explorer / Shell)
 node dist/index.js stripe inspect cus_123 --seller acme
@@ -208,7 +215,48 @@ node dist/index.js stripe update cus_123 --params '{"description":"Updated from 
 node dist/index.js stripe run-request GET /v1/customers/cus_123 --seller acme
 ```
 
-Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).
+Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE` or `--store`).
+
+### One-time payment Checkout blueprint
+
+Implements Stripe’s “Accept a one-time payment with Checkout” flow on the **platform** account:
+
+1. **`stripe create-product --seller <id>`** — creates a platform product with a one-time default price and persists `checkoutProductId` / `checkoutPriceId` on the seller record. Defaults: name `Example Product`, amount `2000` (smallest currency unit), currency from `CURRENCY` or `usd`. Optional flags: `--name`, `--unit-amount`, `--currency`.
+2. **`stripe create-checkout-session --seller <id>`** — creates a platform Checkout Session in `mode: "payment"` using the stored price (or `--price`). Writes `checkoutSessionId` / `checkoutSessionUrl` and resets `checkoutCompleted` to `false`. Optional: `--success-url`, `--cancel-url`.
+3. **`stripe handle-webhooks`** — on `checkout.session.completed`, looks up the seller by session id and sets `checkoutCompleted` to `true`.
+
+Open the `url` from the `create-checkout-session` JSON output to pay. For local webhooks:
+
+```bash
+stripe listen --forward-to localhost:4242/webhooks/stripe
+# set STRIPE_WEBHOOK_SECRET from `stripe listen --print-secret`
+```
+
+Redirect defaults when flags/env are unset point at the Stripe Workbench one-time-payment blueprint confirmation URL. Prefer setting `STRIPE_CHECKOUT_SUCCESS_URL` / `STRIPE_CHECKOUT_CANCEL_URL` (see `.env.example`) for local apps.
+
+Platform one-time Checkout does **not** require a connected account. `create-product` creates an empty seller record if none exists. You still need `--seller` so ids land in the local store for session → webhook mapping.
+
+### Direct-charge Checkout (connected account)
+
+Pass `--direct-charge` to create the session on the connected account with inline `price_data` and an application fee (default product name `Cookie`, amount `100000`, fee `123`). Requires `create-account` first so the seller has an `accountId`. Success URL defaults to `STRIPE_CHECKOUT_SUCCESS_URL` or `http://localhost:4242/checkout/success`. Programmatic alias: `createDirectChargeCheckoutSession` (`createEmbeddedCheckoutSession` is deprecated).
+
+### Store fields to know
+
+| Field | Set by | Used for |
+| --- | --- | --- |
+| `checkoutProductId` / `checkoutPriceId` | `create-product` | Platform one-time Checkout line item |
+| `productId` / `priceId` | `create-subscription-plan` | Platform subscription |
+| `checkoutSessionId` / `checkoutSessionUrl` / `checkoutCompleted` | checkout + webhooks | Both Checkout flows |
+
+Do not reuse subscription `priceId` for one-time Checkout unless you pass it explicitly with `--price`.
+
+### Common pitfalls
+
+- Run `create-product` (or pass `--price`) before platform `create-checkout-session`; otherwise the CLI errors that the seller has no checkout price id.
+- `--direct-charge` needs an onboarded connected account; the default (no flag) charges the platform and needs a stored/override price.
+- `unit-amount` values are in the smallest currency unit (for example `2000` = $20.00 USD).
+- Build first (`npm run build`) so `node dist/index.js stripe …` includes `create-product`.
+- Keep `STRIPE_WEBHOOK_SECRET` in sync with the endpoint or `stripe listen` secret, or signed webhook handling fails.
 
 ### Workbench-style debugging
 
