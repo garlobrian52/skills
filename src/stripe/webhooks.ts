@@ -5,6 +5,8 @@ import {
   findAccountByCheckoutSession,
   findAccountByStripeId,
   findAccountBySubscription,
+  getOneTimeCheckout,
+  setOneTimeCheckout,
   upsertAccount,
   type ConnectedAccountRecord,
 } from "./store.js"
@@ -99,13 +101,25 @@ export async function handleStripeWebhookEvent(
         detail: "Checkout session id missing",
       }
     }
+
+    const oneTime = await getOneTimeCheckout(storePath)
+    if (oneTime.checkoutSessionId === sessionId) {
+      await setOneTimeCheckout({ checkoutCompleted: true }, storePath)
+      return {
+        type,
+        handled: true,
+        sellerId: null,
+        detail: "Marked one-time checkout payment complete",
+      }
+    }
+
     const record = await findAccountByCheckoutSession(sessionId, storePath)
     if (!record) {
       return {
         type,
         handled: false,
         sellerId: null,
-        detail: `No local seller mapped to checkout session ${sessionId}`,
+        detail: `No local record mapped to checkout session ${sessionId}`,
       }
     }
     record.checkoutCompleted = true
