@@ -23,6 +23,7 @@ describe("stripe CLI help", () => {
     assert.match(stdout, /create-account-link/)
     assert.match(stdout, /create-product/)
     assert.match(stdout, /create-checkout-session/)
+    assert.match(stdout, /create-destination-charge/)
     assert.match(stdout, /create-subscription-plan/)
     assert.match(stdout, /attach-balance-payment-method/)
     assert.match(stdout, /create-subscription/)
@@ -262,8 +263,40 @@ describe("stripe domain operations (mocked client)", () => {
           return { id: "sub_mock_1", status: "active" }
         },
       },
+      paymentIntents: {
+        create: async (params) => {
+          assert.equal(params.confirm, true)
+          assert.deepEqual(params.payment_method_types, ["card"])
+          assert.equal(params.application_fee_amount, 123)
+          assert.equal(params.amount, 10_000)
+          assert.equal(params.currency, "usd")
+          assert.equal(params.transfer_data.destination, "acct_mock_1")
+          assert.equal(params.description, "(created by Testing Blueprints)")
+          assert.equal(params.return_url, "https://example.com/return")
+          return { id: "pi_mock_1", status: "succeeded" }
+        },
+      },
     }
   }
+
+  it("runs create-account → destination charge sequence", async () => {
+    const stripe = mockStripe()
+
+    const account = await stripeMod.createConnectedAccount(
+      { sellerId: "seller-dest", storePath },
+      stripe,
+    )
+    assert.equal(account.accountId, "acct_mock_1")
+
+    const { paymentIntent } = await stripeMod.createDestinationCharge(
+      { sellerId: "seller-dest", storePath },
+      stripe,
+    )
+    assert.equal(paymentIntent.id, "pi_mock_1")
+
+    const record = await stripeMod.requireAccount("seller-dest", storePath)
+    assert.equal(record.paymentIntentId, "pi_mock_1")
+  })
 
   it("runs create-product → checkout for one-time payment blueprint", async () => {
     const stripe = mockStripe()

@@ -5,6 +5,7 @@ import {
   createAccountOnboardingLink,
   createConnectedAccount,
   createCheckoutSession,
+  createDestinationCharge,
   createDirectChargeCheckoutSession,
   createPlatformSubscription,
   createProduct,
@@ -299,6 +300,80 @@ const createCheckoutSessionCmd = defineCommand({
         sellerId: record.sellerId,
         checkoutSessionId: session.id,
         url: session.url,
+      })
+    })
+  },
+})
+
+const createDestinationChargeCmd = defineCommand({
+  meta: {
+    name: "create-destination-charge",
+    description:
+      "Create a confirmed PaymentIntent with a destination charge on the platform account",
+  },
+  args: {
+    seller: {
+      type: "string",
+      description: "Local seller id (destination defaults to stored account id)",
+      required: true,
+    },
+    amount: {
+      type: "string",
+      description:
+        "Charge amount in the smallest currency unit (or set STRIPE_CHARGE_AMOUNT)",
+    },
+    "application-fee": {
+      type: "string",
+      description:
+        "Application fee amount (or set STRIPE_APPLICATION_FEE, default 123)",
+    },
+    currency: {
+      type: "string",
+      description: "Currency code (or set CURRENCY)",
+    },
+    destination: {
+      type: "string",
+      description:
+        "Connected account id for transfer_data.destination (or set STRIPE_TRANSFER_DESTINATION)",
+    },
+    "payment-method": {
+      type: "string",
+      description:
+        "Payment method id for confirm (or set STRIPE_TEST_PAYMENT_METHOD)",
+    },
+    "return-url": {
+      type: "string",
+      description: "Return URL for redirect-based confirmation",
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const { record, paymentIntent } = await createDestinationCharge({
+        sellerId: args.seller,
+        amount: args.amount ? Number(args.amount) : undefined,
+        applicationFeeAmount: args["application-fee"]
+          ? Number(args["application-fee"])
+          : undefined,
+        currency: args.currency,
+        destination: args.destination,
+        paymentMethodId: args["payment-method"],
+        returnUrl: args["return-url"],
+        storePath: args.store,
+      })
+      printJson({
+        ok: true,
+        action: "create-destination-charge",
+        sellerId: record.sellerId,
+        accountId: record.accountId,
+        destination:
+          args.destination ??
+          (optionalEnv("STRIPE_TRANSFER_DESTINATION", "") || record.accountId),
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
       })
     })
   },
@@ -732,6 +807,7 @@ export default defineCommand({
     "create-account-link": createAccountLinkCmd,
     "create-product": createProductCmd,
     "create-checkout-session": createCheckoutSessionCmd,
+    "create-destination-charge": createDestinationChargeCmd,
     "create-subscription-plan": createSubscriptionPlanCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,

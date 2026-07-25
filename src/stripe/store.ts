@@ -23,6 +23,8 @@ export interface ConnectedAccountRecord {
   /** Default price id from the subscription product (`price_...`). */
   priceId: string | null
   paymentMethodId: string | null
+  /** Destination charge PaymentIntent id (`pi_...`). */
+  paymentIntentId: string | null
   subscriptionId: string | null
   subscriptionPaid: boolean
   updatedAt: string
@@ -62,6 +64,7 @@ export function createEmptyRecord(
     productId: null,
     priceId: null,
     paymentMethodId: null,
+    paymentIntentId: null,
     subscriptionId: null,
     subscriptionPaid: false,
     updatedAt: now,
