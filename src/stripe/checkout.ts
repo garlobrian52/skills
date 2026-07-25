@@ -1,9 +1,84 @@
 import type Stripe from "stripe"
 import { getStripeClient } from "./client.js"
 import { optionalEnv } from "./env.js"
-import { requireAccount, upsertAccount, type ConnectedAccountRecord } from "./store.js"
+import {
+  getCatalog,
+  requireAccount,
+  setOneTimeCheckout,
+  upsertAccount,
+  type ConnectedAccountRecord,
+  type OneTimeCheckoutRecord,
+} from "./store.js"
 
 export interface CreateCheckoutSessionInput {
+  /** Price id override; defaults to the catalog price from create-product. */
+  priceId?: string
+  quantity?: number
+  successUrl?: string
+  cancelUrl?: string
+  storePath?: string
+}
+
+/**
+ * Create a platform Checkout Session for a one-time payment.
+ * Uses the catalog default_price from create-product when priceId is omitted.
+ */
+export async function createCheckoutSession(
+  input: CreateCheckoutSessionInput = {},
+  stripe: Stripe = getStripeClient(),
+): Promise<{
+  session: Stripe.Checkout.Session
+  checkout: OneTimeCheckoutRecord
+  priceId: string
+}> {
+  const catalog = await getCatalog(input.storePath)
+  const priceId = input.priceId ?? catalog.priceId
+  if (!priceId) {
+    throw new Error(
+      "No price id available. Run create-product first, or pass --price.",
+    )
+  }
+
+  const quantity = input.quantity ?? 1
+  const successUrl =
+    input.successUrl ??
+    optionalEnv(
+      "STRIPE_CHECKOUT_SUCCESS_URL",
+      "http://localhost:4242/checkout/success",
+    )
+  const cancelUrl =
+    input.cancelUrl ??
+    optionalEnv(
+      "STRIPE_CHECKOUT_CANCEL_URL",
+      "http://localhost:4242/checkout/cancel",
+    )
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    line_items: [
+      {
+        price: priceId,
+        quantity,
+      },
+    ],
+  })
+
+  const checkout = await setOneTimeCheckout(
+    {
+      checkoutSessionId: session.id,
+      checkoutSessionUrl: session.url,
+      checkoutCompleted: false,
+      priceId,
+    },
+    input.storePath,
+  )
+
+  return { session, checkout, priceId }
+}
+
+export interface CreateEmbeddedCheckoutSessionInput {
   sellerId: string
   successUrl?: string
   productName?: string
@@ -18,7 +93,7 @@ export interface CreateCheckoutSessionInput {
  * application fee transferred to the platform.
  */
 export async function createEmbeddedCheckoutSession(
-  input: CreateCheckoutSessionInput,
+  input: CreateEmbeddedCheckoutSessionInput,
   stripe: Stripe = getStripeClient(),
 ): Promise<{ record: ConnectedAccountRecord; session: Stripe.Checkout.Session }> {
   const record = await requireAccount(input.sellerId, input.storePath)

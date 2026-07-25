@@ -3,9 +3,11 @@ import { defineCommand } from "citty"
 import {
   attachBalancePaymentMethod,
   createAccountOnboardingLink,
+  createCheckoutSession,
   createConnectedAccount,
   createEmbeddedCheckoutSession,
   createPlatformSubscription,
+  createProduct,
   createSubscriptionPlan,
   constructWebhookEvent,
   defaultStorePath,
@@ -156,33 +158,30 @@ const createAccountLinkCmd = defineCommand({
   },
 })
 
-const createCheckoutSessionCmd = defineCommand({
+const createProductCmd = defineCommand({
   meta: {
-    name: "create-checkout-session",
+    name: "create-product",
     description:
-      "Create a Checkout Session on the connected account with an application fee",
+      "Create a product with a one-time default price for Checkout payments",
   },
   args: {
-    seller: {
+    name: {
       type: "string",
-      description: "Local seller id",
-      required: true,
-    },
-    "success-url": {
-      type: "string",
-      description: "URL to redirect after successful payment",
+      description: "Product name",
+      default: "Example Product",
     },
     "unit-amount": {
       type: "string",
-      description: "Amount in the smallest currency unit (default 100000)",
-    },
-    "application-fee": {
-      type: "string",
-      description: "Application fee amount (default 123)",
+      description: "Price amount in the smallest currency unit (default 2000)",
     },
     currency: {
       type: "string",
       description: "Currency code (or set CURRENCY)",
+    },
+    force: {
+      type: "boolean",
+      description: "Create a new product even if the catalog already has one",
+      default: false,
     },
     store: {
       type: "string",
@@ -191,25 +190,116 @@ const createCheckoutSessionCmd = defineCommand({
   },
   async run({ args }) {
     await withEnv(async () => {
-      const { record, session } = await createEmbeddedCheckoutSession({
-        sellerId: args.seller,
-        successUrl: args["success-url"],
+      const { product, priceId, catalog } = await createProduct({
+        name: args.name,
         unitAmount: args["unit-amount"]
           ? Number(args["unit-amount"])
           : undefined,
-        applicationFeeAmount: args["application-fee"]
-          ? Number(args["application-fee"])
-          : undefined,
         currency: args.currency,
+        reuseExisting: !args.force,
+        storePath: args.store,
+      })
+      printJson({
+        ok: true,
+        action: "create-product",
+        productId: product.id,
+        priceId,
+        productName: catalog.productName,
+        store: args.store ?? defaultStorePath(),
+      })
+    })
+  },
+})
+
+const createCheckoutSessionCmd = defineCommand({
+  meta: {
+    name: "create-checkout-session",
+    description:
+      "Create a Checkout Session for a one-time payment (or Connect direct charge with --seller)",
+  },
+  args: {
+    seller: {
+      type: "string",
+      description:
+        "Local seller id for Connect direct-charge checkout with application fee",
+    },
+    price: {
+      type: "string",
+      description:
+        "Price id for platform one-time checkout (defaults to catalog from create-product)",
+    },
+    quantity: {
+      type: "string",
+      description: "Line item quantity (default 1)",
+    },
+    "success-url": {
+      type: "string",
+      description: "URL to redirect after successful payment",
+    },
+    "cancel-url": {
+      type: "string",
+      description: "URL to redirect when checkout is canceled",
+    },
+    "unit-amount": {
+      type: "string",
+      description:
+        "Connect mode only: amount in the smallest currency unit (default 100000)",
+    },
+    "application-fee": {
+      type: "string",
+      description: "Connect mode only: application fee amount (default 123)",
+    },
+    currency: {
+      type: "string",
+      description: "Connect mode only: currency code (or set CURRENCY)",
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      if (args.seller) {
+        const { record, session } = await createEmbeddedCheckoutSession({
+          sellerId: args.seller,
+          successUrl: args["success-url"],
+          unitAmount: args["unit-amount"]
+            ? Number(args["unit-amount"])
+            : undefined,
+          applicationFeeAmount: args["application-fee"]
+            ? Number(args["application-fee"])
+            : undefined,
+          currency: args.currency,
+          storePath: args.store,
+        })
+        printJson({
+          ok: true,
+          action: "create-checkout-session",
+          mode: "connect",
+          sellerId: record.sellerId,
+          accountId: record.accountId,
+          checkoutSessionId: session.id,
+          url: session.url,
+        })
+        return
+      }
+
+      const { session, checkout, priceId } = await createCheckoutSession({
+        priceId: args.price,
+        quantity: args.quantity ? Number(args.quantity) : undefined,
+        successUrl: args["success-url"],
+        cancelUrl: args["cancel-url"],
         storePath: args.store,
       })
       printJson({
         ok: true,
         action: "create-checkout-session",
-        sellerId: record.sellerId,
-        accountId: record.accountId,
+        mode: "payment",
+        priceId,
         checkoutSessionId: session.id,
-        url: session.url,
+        url: session.url ?? checkout.checkoutSessionUrl,
+        store: args.store ?? defaultStorePath(),
       })
     })
   },
@@ -636,9 +726,10 @@ export default defineCommand({
   meta: {
     name: "stripe",
     description:
-      "Stripe Accounts v2: onboard connected accounts, accept embedded payments, charge subscriptions",
+      "Stripe: one-time Checkout payments, Accounts v2 onboarding, and platform subscriptions",
   },
   subCommands: {
+    "create-product": createProductCmd,
     "create-account": createAccountCmd,
     "create-account-link": createAccountLinkCmd,
     "create-checkout-session": createCheckoutSessionCmd,
