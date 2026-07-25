@@ -186,21 +186,26 @@ skills/
 └── README.md
 ```
 
-## Stripe Accounts v2 (platform payments)
+## Stripe (Accounts v2 + one-time Checkout)
 
-The CLI also includes Stripe Accounts v2 helpers for onboarding connected sellers, accepting direct charges with an application fee, and charging platform subscriptions from the connected account balance:
+The CLI includes Stripe helpers for onboarding connected sellers, accepting one-time Checkout payments, and charging platform subscriptions from the connected account balance:
 
 ```bash
 cp .env.example .env
 # Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY from https://dashboard.stripe.com/apikeys
 
+# One-time payment with Checkout
+node dist/index.js stripe create-product --seller acme
+node dist/index.js stripe create-checkout-session --seller acme
+# Open the returned `url` to complete payment, then confirm via webhook:
+node dist/index.js stripe handle-webhooks --port 4242
+
+# Connected accounts + platform subscriptions (Accounts v2)
 node dist/index.js stripe create-account --seller acme
 node dist/index.js stripe create-account-link --seller acme
-node dist/index.js stripe create-checkout-session --seller acme
 node dist/index.js stripe create-subscription-plan --seller acme
 node dist/index.js stripe attach-balance-payment-method --seller acme
 node dist/index.js stripe create-subscription --seller acme
-node dist/index.js stripe handle-webhooks --port 4242
 
 # Workbench-style debugging (Inspector / API Explorer / Shell)
 node dist/index.js stripe inspect cus_123 --seller acme

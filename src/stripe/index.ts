@@ -18,7 +18,7 @@ export {
   createConnectedAccount,
   createAccountOnboardingLink,
 } from "./accounts.js"
-export { createEmbeddedCheckoutSession } from "./checkout.js"
+export { createProduct, createCheckoutSession } from "./checkout.js"
 export {
   createSubscriptionPlan,
   attachBalancePaymentMethod,

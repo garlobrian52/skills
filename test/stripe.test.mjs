@@ -21,6 +21,7 @@ describe("stripe CLI help", () => {
     const { stdout } = await exec("node", [CLI, "stripe", "--help"])
     assert.match(stdout, /create-account/)
     assert.match(stdout, /create-account-link/)
+    assert.match(stdout, /create-product/)
     assert.match(stdout, /create-checkout-session/)
     assert.match(stdout, /create-subscription-plan/)
     assert.match(stdout, /attach-balance-payment-method/)
@@ -194,11 +195,12 @@ describe("stripe domain operations (mocked client)", () => {
       },
       checkout: {
         sessions: {
-          create: async (params, options) => {
+          create: async (params) => {
             assert.equal(params.mode, "payment")
-            assert.equal(params.payment_method_types[0], "card")
-            assert.equal(params.payment_intent_data.application_fee_amount, 123)
-            assert.equal(options.stripeAccount, "acct_mock_1")
+            assert.equal(params.line_items[0].price, "price_onetime_1")
+            assert.equal(params.line_items[0].quantity, 1)
+            assert.ok(params.success_url)
+            assert.ok(params.cancel_url)
             return {
               id: "cs_mock_1",
               url: "https://checkout.stripe.com/c/pay/cs_mock_1",
@@ -208,12 +210,22 @@ describe("stripe domain operations (mocked client)", () => {
       },
       products: {
         create: async (params) => {
-          assert.equal(params.name, "Platform subscription")
-          assert.equal(params.default_price_data.recurring.interval, "month")
-          assert.equal(params.default_price_data.unit_amount, 1000)
+          if (params.default_price_data?.recurring) {
+            assert.equal(params.name, "Platform subscription")
+            assert.equal(params.default_price_data.recurring.interval, "month")
+            assert.equal(params.default_price_data.unit_amount, 1000)
+            return {
+              id: "prod_sub_1",
+              default_price: "price_mock_1",
+            }
+          }
+          assert.equal(params.name, "Example Product")
+          assert.equal(params.default_price_data.currency, "usd")
+          assert.equal(params.default_price_data.unit_amount, 2000)
+          assert.equal(params.default_price_data.recurring, undefined)
           return {
-            id: "prod_mock_1",
-            default_price: "price_mock_1",
+            id: "prod_onetime_1",
+            default_price: "price_onetime_1",
           }
         },
       },
@@ -244,7 +256,59 @@ describe("stripe domain operations (mocked client)", () => {
     }
   }
 
-  it("runs create-account → account-link → checkout → subscription sequence", async () => {
+  it("runs create-product → create-checkout-session one-time payment flow", async () => {
+    const stripe = mockStripe()
+
+    const product = await stripeMod.createProduct(
+      { sellerId: "seller-checkout", storePath },
+      stripe,
+    )
+    assert.equal(product.product.id, "prod_onetime_1")
+    assert.equal(product.priceId, "price_onetime_1")
+
+    const { session } = await stripeMod.createCheckoutSession(
+      { sellerId: "seller-checkout", storePath },
+      stripe,
+    )
+    assert.equal(session.id, "cs_mock_1")
+    assert.match(session.url, /checkout\.stripe\.com/)
+
+    const webhook = await stripeMod.handleStripeWebhookEvent(
+      {
+        type: "checkout.session.completed",
+        data: { object: { id: "cs_mock_1" } },
+      },
+      storePath,
+    )
+    assert.equal(webhook.handled, true)
+
+    const finalRecord = await stripeMod.requireAccount(
+      "seller-checkout",
+      storePath,
+    )
+    assert.equal(finalRecord.productId, "prod_onetime_1")
+    assert.equal(finalRecord.priceId, "price_onetime_1")
+    assert.equal(finalRecord.checkoutSessionId, "cs_mock_1")
+    assert.equal(finalRecord.checkoutCompleted, true)
+  })
+
+  it("requires create-product before create-checkout-session", async () => {
+    const stripe = mockStripe()
+    await stripeMod.createConnectedAccount(
+      { sellerId: "seller-no-price", storePath },
+      stripe,
+    )
+    await assert.rejects(
+      () =>
+        stripeMod.createCheckoutSession(
+          { sellerId: "seller-no-price", storePath },
+          stripe,
+        ),
+      /create-product first/i,
+    )
+  })
+
+  it("runs create-account → account-link → subscription sequence", async () => {
     const stripe = mockStripe()
 
     const account = await stripeMod.createConnectedAccount(
@@ -261,12 +325,6 @@ describe("stripe domain operations (mocked client)", () => {
       stripe,
     )
     assert.match(url, /connect\.stripe\.com/)
-
-    const { session } = await stripeMod.createEmbeddedCheckoutSession(
-      { sellerId: "seller-flow", storePath },
-      stripe,
-    )
-    assert.equal(session.id, "cs_mock_1")
 
     const plan = await stripeMod.createSubscriptionPlan(
       { sellerId: "seller-flow", storePath },
@@ -288,7 +346,6 @@ describe("stripe domain operations (mocked client)", () => {
 
     const finalRecord = await stripeMod.requireAccount("seller-flow", storePath)
     assert.equal(finalRecord.accountId, "acct_mock_1")
-    assert.equal(finalRecord.checkoutSessionId, "cs_mock_1")
     assert.equal(finalRecord.priceId, "price_mock_1")
     assert.equal(finalRecord.paymentMethodId, "pm_balance_1")
     assert.equal(finalRecord.subscriptionId, "sub_mock_1")

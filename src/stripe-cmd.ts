@@ -3,9 +3,10 @@ import { defineCommand } from "citty"
 import {
   attachBalancePaymentMethod,
   createAccountOnboardingLink,
+  createCheckoutSession,
   createConnectedAccount,
-  createEmbeddedCheckoutSession,
   createPlatformSubscription,
+  createProduct,
   createSubscriptionPlan,
   constructWebhookEvent,
   defaultStorePath,
@@ -156,29 +157,25 @@ const createAccountLinkCmd = defineCommand({
   },
 })
 
-const createCheckoutSessionCmd = defineCommand({
+const createProductCmd = defineCommand({
   meta: {
-    name: "create-checkout-session",
+    name: "create-product",
     description:
-      "Create a Checkout Session on the connected account with an application fee",
+      "Create a product with a one-time default price for Checkout payments",
   },
   args: {
     seller: {
       type: "string",
-      description: "Local seller id",
-      required: true,
+      description: "Optional local seller id to store product/price ids against",
     },
-    "success-url": {
+    name: {
       type: "string",
-      description: "URL to redirect after successful payment",
+      description: "Product name",
+      default: "Example Product",
     },
     "unit-amount": {
       type: "string",
-      description: "Amount in the smallest currency unit (default 100000)",
-    },
-    "application-fee": {
-      type: "string",
-      description: "Application fee amount (default 123)",
+      description: "Price amount in the smallest currency unit (default 2000)",
     },
     currency: {
       type: "string",
@@ -191,23 +188,74 @@ const createCheckoutSessionCmd = defineCommand({
   },
   async run({ args }) {
     await withEnv(async () => {
-      const { record, session } = await createEmbeddedCheckoutSession({
+      const { product, priceId, record } = await createProduct({
         sellerId: args.seller,
-        successUrl: args["success-url"],
+        name: args.name,
         unitAmount: args["unit-amount"]
           ? Number(args["unit-amount"])
-          : undefined,
-        applicationFeeAmount: args["application-fee"]
-          ? Number(args["application-fee"])
           : undefined,
         currency: args.currency,
         storePath: args.store,
       })
       printJson({
         ok: true,
+        action: "create-product",
+        productId: product.id,
+        priceId,
+        sellerId: record?.sellerId ?? null,
+      })
+    })
+  },
+})
+
+const createCheckoutSessionCmd = defineCommand({
+  meta: {
+    name: "create-checkout-session",
+    description:
+      "Create a Checkout Session for a one-time payment using a stored product price",
+  },
+  args: {
+    seller: {
+      type: "string",
+      description: "Local seller id",
+      required: true,
+    },
+    price: {
+      type: "string",
+      description: "Price id override (defaults to stored price from create-product)",
+    },
+    quantity: {
+      type: "string",
+      description: "Line item quantity (default 1)",
+    },
+    "success-url": {
+      type: "string",
+      description: "URL to redirect after successful payment",
+    },
+    "cancel-url": {
+      type: "string",
+      description: "URL to redirect if the customer cancels Checkout",
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      const { record, session } = await createCheckoutSession({
+        sellerId: args.seller,
+        priceId: args.price,
+        quantity: args.quantity ? Number(args.quantity) : undefined,
+        successUrl: args["success-url"],
+        cancelUrl: args["cancel-url"],
+        storePath: args.store,
+      })
+      printJson({
+        ok: true,
         action: "create-checkout-session",
         sellerId: record.sellerId,
-        accountId: record.accountId,
+        priceId: record.priceId,
         checkoutSessionId: session.id,
         url: session.url,
       })
@@ -636,11 +684,12 @@ export default defineCommand({
   meta: {
     name: "stripe",
     description:
-      "Stripe Accounts v2: onboard connected accounts, accept embedded payments, charge subscriptions",
+      "Stripe: onboard connected accounts, accept one-time Checkout payments, charge subscriptions",
   },
   subCommands: {
     "create-account": createAccountCmd,
     "create-account-link": createAccountLinkCmd,
+    "create-product": createProductCmd,
     "create-checkout-session": createCheckoutSessionCmd,
     "create-subscription-plan": createSubscriptionPlanCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
