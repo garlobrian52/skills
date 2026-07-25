@@ -15,6 +15,10 @@ export interface ConnectedAccountRecord {
   checkoutSessionId: string | null
   checkoutSessionUrl: string | null
   checkoutCompleted: boolean
+  /** One-time Checkout product id (`prod_...`). */
+  checkoutProductId: string | null
+  /** One-time Checkout price id (`price_...`). */
+  checkoutPriceId: string | null
   productId: string | null
   /** Default price id from the subscription product (`price_...`). */
   priceId: string | null
@@ -53,6 +57,8 @@ export function createEmptyRecord(
     checkoutSessionId: null,
     checkoutSessionUrl: null,
     checkoutCompleted: false,
+    checkoutProductId: null,
+    checkoutPriceId: null,
     productId: null,
     priceId: null,
     paymentMethodId: null,
