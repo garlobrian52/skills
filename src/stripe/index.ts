@@ -21,6 +21,7 @@ export {
   createEmbeddedCheckoutSession,
 } from "./checkout.js"
 export { createProduct } from "./products.js"
+export { createDestinationCharge } from "./destination-charge.js"
 export {
   createSubscriptionPlan,
   attachBalancePaymentMethod,
