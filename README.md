@@ -188,14 +188,22 @@ skills/
 
 ## Stripe Accounts v2 (platform payments)
 
-The CLI also includes Stripe Accounts v2 helpers for onboarding connected sellers, accepting direct charges with an application fee, and charging platform subscriptions from the connected account balance:
+The CLI includes Stripe helpers under `src/stripe/` for Accounts v2 onboarding, destination charges (platform PaymentIntent with transfer to a connected account), Checkout sessions, and platform subscriptions billed from the connected account balance:
 
 ```bash
 cp .env.example .env
 # Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY from https://dashboard.stripe.com/apikeys
 
+npm run build
+
+# Destination charge blueprint (platform PaymentIntent → connected account)
 node dist/index.js stripe create-account --seller acme
 node dist/index.js stripe create-account-link --seller acme
+node dist/index.js stripe create-destination-charge --seller acme \
+  --payment-method pm_card_visa
+
+# Checkout / subscription sequence
+node dist/index.js stripe create-product --seller acme
 node dist/index.js stripe create-checkout-session --seller acme
 node dist/index.js stripe create-subscription-plan --seller acme
 node dist/index.js stripe attach-balance-payment-method --seller acme
@@ -208,7 +216,43 @@ node dist/index.js stripe update cus_123 --params '{"description":"Updated from 
 node dist/index.js stripe run-request GET /v1/customers/cus_123 --seller acme
 ```
 
-Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE`).
+Stripe resource ids are stored in `.cubic-stripe.json` (override with `CUBIC_STRIPE_STORE` or `--store`).
+
+### Destination charge blueprint
+
+Implements Stripe’s “Create a destination charge” flow: a **confirmed** `PaymentIntent` on the **platform** account that transfers funds to a connected account and keeps an application fee.
+
+1. **`stripe create-account --seller <id>`** — creates the connected account and stores `accountId` (used as the default transfer destination).
+2. **`stripe create-destination-charge --seller <id>`** — calls `POST /v1/payment_intents` with:
+   - `confirm: true` and `payment_method_types: ["card"]`
+   - `transfer_data.destination` → seller’s `accountId`, or `STRIPE_TRANSFER_DESTINATION` / `--destination`
+   - `application_fee_amount` → `STRIPE_APPLICATION_FEE` / `--application-fee` (default `123`)
+   - `amount` → `STRIPE_CHARGE_AMOUNT` / `--amount` (default `10000`)
+   - `currency` → `CURRENCY` / `--currency` (default `usd`)
+   - `description` → `(created by Testing Blueprints)`
+   - `return_url` → `STRIPE_PAYMENT_RETURN_URL` / `--return-url` (default `https://example.com/return`)
+   - optional `payment_method` → `STRIPE_TEST_PAYMENT_METHOD` / `--payment-method`
+
+Persists `paymentIntentId` on the seller record. JSON output includes `paymentIntentId`, `status`, and the resolved `destination`.
+
+This is not the same as Checkout `--direct-charge` (session created on the connected account). Destination charges keep the PaymentIntent on the platform and use `transfer_data.destination`.
+
+### Store fields to know
+
+| Field | Set by | Used for |
+| --- | --- | --- |
+| `accountId` | `create-account` | Default `transfer_data.destination` for destination charges |
+| `paymentIntentId` | `create-destination-charge` | Last destination-charge PaymentIntent (`pi_...`) |
+| `checkoutProductId` / `checkoutPriceId` | `create-product` | Platform one-time Checkout line item |
+| `checkoutSessionId` / `checkoutSessionUrl` / `checkoutCompleted` | checkout + webhooks | Checkout session lifecycle |
+
+### Common pitfalls
+
+- Run `create-account` before `create-destination-charge`; the CLI errors if the seller is missing or has no destination (and no `--destination` / `STRIPE_TRANSFER_DESTINATION` override).
+- Confirming in test mode usually needs a payment method: pass `--payment-method pm_card_visa` or set `STRIPE_TEST_PAYMENT_METHOD`. Without it, Stripe may reject confirmation.
+- Amounts and fees are in the smallest currency unit (for example `10000` = $100.00 USD, fee `123` = $1.23).
+- Destination charge ≠ direct-charge Checkout. Use `create-destination-charge` for platform PaymentIntents with transfers; use `create-checkout-session --direct-charge` for Checkout on the connected account.
+- Build first (`npm run build`) so `node dist/index.js stripe …` includes `create-destination-charge`.
 
 ### Workbench-style debugging
 
