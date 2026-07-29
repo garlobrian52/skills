@@ -91,6 +91,21 @@ export async function createDirectChargeCheckoutSession(
   const unitAmount = input.unitAmount ?? 100_000
   const applicationFeeAmount = input.applicationFeeAmount ?? 123
 
+  if (!Number.isInteger(unitAmount) || unitAmount <= 0) {
+    throw new Error(
+      `unit amount must be a positive integer (minor units), got: ${unitAmount}`,
+    )
+  }
+  if (
+    !Number.isInteger(applicationFeeAmount) ||
+    applicationFeeAmount < 0 ||
+    applicationFeeAmount >= unitAmount
+  ) {
+    throw new Error(
+      `application fee (${applicationFeeAmount}) must be a non-negative integer less than the charge amount (${unitAmount})`,
+    )
+  }
+
   const session = await stripe.checkout.sessions.create(
     {
       success_url: successUrl,

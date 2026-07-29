@@ -202,6 +202,11 @@ node dist/index.js stripe attach-balance-payment-method --seller acme
 node dist/index.js stripe create-subscription --seller acme
 node dist/index.js stripe handle-webhooks --port 4242
 
+# Embedded PaymentElement flow (client-side confirmation)
+node dist/index.js stripe create-payment-intent --amount 5000            # platform charge
+node dist/index.js stripe create-payment-intent --seller acme --application-fee 200  # direct charge
+node dist/index.js stripe serve-payment --port 4242 --seller acme        # PaymentElement page + webhook
+
 # Workbench-style debugging (Inspector / API Explorer / Shell)
 node dist/index.js stripe inspect cus_123 --seller acme
 node dist/index.js stripe update cus_123 --params '{"description":"Updated from CLI"}'
