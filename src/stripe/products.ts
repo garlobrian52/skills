@@ -39,13 +39,18 @@ export async function createProduct(
   const name = input.name ?? "Example Product"
   const unitAmount = input.unitAmount ?? 2000
 
-  const product = await stripe.products.create({
-    name,
-    default_price_data: {
-      currency,
-      unit_amount: unitAmount,
+  const product = await stripe.products.create(
+    {
+      name,
+      default_price_data: {
+        currency,
+        unit_amount: unitAmount,
+      },
     },
-  })
+    {
+      idempotencyKey: `product:${input.sellerId}:${name}:${unitAmount}:${currency}`,
+    },
+  )
 
   const priceId =
     typeof product.default_price === "string"

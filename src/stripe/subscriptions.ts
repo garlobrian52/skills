@@ -31,14 +31,19 @@ export async function createSubscriptionPlan(
   const unitAmount = input.unitAmount ?? 1000
   const interval = input.interval ?? "month"
 
-  const product = await stripe.products.create({
-    name,
-    default_price_data: {
-      currency,
-      unit_amount: unitAmount,
-      recurring: { interval },
+  const product = await stripe.products.create(
+    {
+      name,
+      default_price_data: {
+        currency,
+        unit_amount: unitAmount,
+        recurring: { interval },
+      },
     },
-  })
+    {
+      idempotencyKey: `subscription-plan:${input.sellerId ?? "platform"}:${name}:${unitAmount}:${currency}:${interval}`,
+    },
+  )
 
   const priceId =
     typeof product.default_price === "string"
@@ -146,14 +151,21 @@ export async function createPlatformSubscription(
     )
   }
 
-  const subscription = await stripe.subscriptions.create({
-    customer_account: record.accountId,
-    default_payment_method: paymentMethodId,
-    items: [{ price: priceId, quantity: 1 }],
-    payment_settings: {
-      payment_method_types: ["stripe_balance"],
+  const subscription = await stripe.subscriptions.create(
+    {
+      customer_account: record.accountId,
+      default_payment_method: paymentMethodId,
+      items: [{ price: priceId, quantity: 1 }],
+      payment_settings: {
+        payment_method_types: ["stripe_balance"],
+      },
+    } as unknown as Stripe.SubscriptionCreateParams,
+    {
+      // Stable key so a retry after a network/store failure reuses the same
+      // subscription instead of billing the account balance twice.
+      idempotencyKey: `platform-subscription:${record.accountId}:${priceId}`,
     },
-  } as unknown as Stripe.SubscriptionCreateParams)
+  )
 
   record.subscriptionId = subscription.id
   record.subscriptionPaid = false

@@ -3,6 +3,7 @@ import { getStripeClient } from "./client.js"
 import { optionalEnv, isStripeTestKey } from "./env.js"
 import {
   createEmptyRecord,
+  getAccount,
   requireAccount,
   upsertAccount,
   type ConnectedAccountRecord,
@@ -25,6 +26,15 @@ export async function createConnectedAccount(
   input: CreateConnectedAccountInput,
   stripe: Stripe = getStripeClient(),
 ): Promise<ConnectedAccountRecord> {
+  // Guard against creating a second Stripe account (and orphaning the first)
+  // when a seller has already been onboarded.
+  const existing = await getAccount(input.sellerId, input.storePath)
+  if (existing?.accountId) {
+    throw new Error(
+      `Seller "${input.sellerId}" already has Stripe account ${existing.accountId}. Refusing to create a duplicate; use a different seller id or reuse the existing account.`,
+    )
+  }
+
   const displayName = input.displayName ?? "Test account"
   const contactEmail = input.contactEmail ?? "testaccount@example.com"
   const country = (

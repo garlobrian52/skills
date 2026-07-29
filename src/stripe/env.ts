@@ -51,6 +51,11 @@ export function optionalEnv(name: string, fallback: string): string {
   return value || fallback
 }
 
+/** Publishable key for client-side PaymentElement (safe to embed in HTML). */
+export function getPublishableKey(): string | undefined {
+  return process.env.STRIPE_PUBLISHABLE_KEY?.trim() || undefined
+}
+
 /** True when the Stripe secret/restricted key is for test mode. */
 export function isStripeTestKey(key?: string): boolean {
   const value = (key ?? process.env.STRIPE_SECRET_KEY ?? "").trim()

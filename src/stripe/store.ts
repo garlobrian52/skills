@@ -1,5 +1,6 @@
 import { promises as fs } from "fs"
 import path from "path"
+import { randomUUID } from "crypto"
 import { optionalEnv } from "./env.js"
 
 /** Persisted Stripe identifiers for a connected seller on this platform. */
@@ -25,6 +26,10 @@ export interface ConnectedAccountRecord {
   paymentMethodId: string | null
   subscriptionId: string | null
   subscriptionPaid: boolean
+  /** Latest embedded PaymentIntent id (`pi_...`). */
+  paymentIntentId: string | null
+  /** Latest embedded PaymentIntent status (never store the client_secret). */
+  paymentIntentStatus: string | null
   updatedAt: string
   createdAt: string
 }
@@ -39,6 +44,44 @@ function defaultStorePath(): string {
     "CUBIC_STRIPE_STORE",
     path.resolve(process.cwd(), ".cubic-stripe.json"),
   )
+}
+
+/**
+ * Build a null-prototype accounts map so seller ids like `__proto__` or
+ * `constructor` are stored and read as plain own properties instead of
+ * colliding with `Object.prototype` accessors.
+ */
+function toSafeAccounts(
+  input: unknown,
+): Record<string, ConnectedAccountRecord> {
+  const safe = Object.create(null) as Record<string, ConnectedAccountRecord>
+  if (input && typeof input === "object") {
+    for (const key of Object.keys(input as Record<string, unknown>)) {
+      safe[key] = (input as Record<string, ConnectedAccountRecord>)[key]
+    }
+  }
+  return safe
+}
+
+/**
+ * Serialize all read-modify-write cycles against a given store file so
+ * overlapping mutations (e.g. concurrent webhook deliveries) cannot clobber
+ * each other's changes. One promise chain is kept per resolved path.
+ */
+const locks = new Map<string, Promise<unknown>>()
+
+function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = locks.get(key) ?? Promise.resolve()
+  const run = prev.then(() => fn())
+  // Keep the chain alive even if this task rejects.
+  locks.set(
+    key,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  )
+  return run
 }
 
 export function createEmptyRecord(
@@ -64,6 +107,8 @@ export function createEmptyRecord(
     paymentMethodId: null,
     subscriptionId: null,
     subscriptionPaid: false,
+    paymentIntentId: null,
+    paymentIntentStatus: null,
     updatedAt: now,
     createdAt: now,
   }
@@ -78,11 +123,11 @@ export async function loadStore(
     if (!parsed || parsed.version !== 1 || typeof parsed.accounts !== "object") {
       throw new Error(`Invalid Stripe store at ${storePath}`)
     }
-    return parsed
+    return { version: 1, accounts: toSafeAccounts(parsed.accounts) }
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code
     if (code === "ENOENT") {
-      return { version: 1, accounts: {} }
+      return { version: 1, accounts: toSafeAccounts(null) }
     }
     throw err
   }
@@ -93,7 +138,34 @@ export async function saveStore(
   storePath: string = defaultStorePath(),
 ): Promise<void> {
   await fs.mkdir(path.dirname(storePath), { recursive: true })
-  await fs.writeFile(storePath, JSON.stringify(data, null, 2) + "\n", "utf8")
+  // Write to a temp file in the same directory then atomically rename so a
+  // crash mid-write can never leave a truncated/corrupt store behind.
+  const tmpPath = `${storePath}.${randomUUID()}.tmp`
+  const serialized = JSON.stringify(data, null, 2) + "\n"
+  try {
+    await fs.writeFile(tmpPath, serialized, "utf8")
+    await fs.rename(tmpPath, storePath)
+  } catch (err) {
+    await fs.rm(tmpPath, { force: true }).catch(() => {})
+    throw err
+  }
+}
+
+/**
+ * Run `fn` against the store under an exclusive lock and persist the result.
+ * Use this for every read-modify-write so concurrent callers are serialized.
+ */
+export async function mutateStore<T>(
+  fn: (store: StripeStoreData) => T | Promise<T>,
+  storePath: string = defaultStorePath(),
+): Promise<T> {
+  const resolved = path.resolve(storePath)
+  return withLock(resolved, async () => {
+    const store = await loadStore(resolved)
+    const result = await fn(store)
+    await saveStore(store, resolved)
+    return result
+  })
 }
 
 export async function getAccount(
@@ -108,14 +180,14 @@ export async function upsertAccount(
   record: ConnectedAccountRecord,
   storePath?: string,
 ): Promise<ConnectedAccountRecord> {
-  const store = await loadStore(storePath)
-  const updated: ConnectedAccountRecord = {
-    ...record,
-    updatedAt: new Date().toISOString(),
-  }
-  store.accounts[record.sellerId] = updated
-  await saveStore(store, storePath)
-  return updated
+  return mutateStore((store) => {
+    const updated: ConnectedAccountRecord = {
+      ...record,
+      updatedAt: new Date().toISOString(),
+    }
+    store.accounts[record.sellerId] = updated
+    return updated
+  }, storePath)
 }
 
 export async function requireAccount(
@@ -131,21 +203,21 @@ export async function requireAccount(
   return record
 }
 
-export async function findAccountByStripeId(
+/** In-memory finder used by locked mutations (operates on a loaded store). */
+export function findRecordByStripeId(
+  store: StripeStoreData,
   accountId: string,
-  storePath?: string,
-): Promise<ConnectedAccountRecord | null> {
-  const store = await loadStore(storePath)
+): ConnectedAccountRecord | null {
   return (
     Object.values(store.accounts).find((a) => a.accountId === accountId) ?? null
   )
 }
 
-export async function findAccountByCheckoutSession(
+/** In-memory finder used by locked mutations (operates on a loaded store). */
+export function findRecordByCheckoutSession(
+  store: StripeStoreData,
   sessionId: string,
-  storePath?: string,
-): Promise<ConnectedAccountRecord | null> {
-  const store = await loadStore(storePath)
+): ConnectedAccountRecord | null {
   return (
     Object.values(store.accounts).find(
       (a) => a.checkoutSessionId === sessionId,
@@ -153,16 +225,40 @@ export async function findAccountByCheckoutSession(
   )
 }
 
-export async function findAccountBySubscription(
+/** In-memory finder used by locked mutations (operates on a loaded store). */
+export function findRecordBySubscription(
+  store: StripeStoreData,
   subscriptionId: string,
-  storePath?: string,
-): Promise<ConnectedAccountRecord | null> {
-  const store = await loadStore(storePath)
+): ConnectedAccountRecord | null {
   return (
     Object.values(store.accounts).find(
       (a) => a.subscriptionId === subscriptionId,
     ) ?? null
   )
+}
+
+export async function findAccountByStripeId(
+  accountId: string,
+  storePath?: string,
+): Promise<ConnectedAccountRecord | null> {
+  const store = await loadStore(storePath)
+  return findRecordByStripeId(store, accountId)
+}
+
+export async function findAccountByCheckoutSession(
+  sessionId: string,
+  storePath?: string,
+): Promise<ConnectedAccountRecord | null> {
+  const store = await loadStore(storePath)
+  return findRecordByCheckoutSession(store, sessionId)
+}
+
+export async function findAccountBySubscription(
+  subscriptionId: string,
+  storePath?: string,
+): Promise<ConnectedAccountRecord | null> {
+  const store = await loadStore(storePath)
+  return findRecordBySubscription(store, subscriptionId)
 }
 
 export { defaultStorePath }

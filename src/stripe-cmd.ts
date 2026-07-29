@@ -6,12 +6,15 @@ import {
   createConnectedAccount,
   createCheckoutSession,
   createDirectChargeCheckoutSession,
+  createPaymentIntent,
   createPlatformSubscription,
   createProduct,
   createSubscriptionPlan,
   constructWebhookEvent,
   defaultStorePath,
+  ensureStripeConfigured,
   getAccount,
+  getPublishableKey,
   handleStripeWebhookEvent,
   inspectObject,
   loadEnvFile,
@@ -19,6 +22,7 @@ import {
   optionalEnv,
   requireAccount,
   runRequest,
+  startPaymentServer,
   updateObject,
 } from "./stripe/index.js"
 
@@ -721,6 +725,132 @@ const handleWebhooksCmd = defineCommand({
   },
 })
 
+const createPaymentIntentCmd = defineCommand({
+  meta: {
+    name: "create-payment-intent",
+    description:
+      "Create a PaymentIntent (automatic payment methods) for the embedded PaymentElement flow",
+  },
+  args: {
+    amount: {
+      type: "string",
+      description: "Amount in the smallest currency unit (default 2000)",
+    },
+    currency: {
+      type: "string",
+      description: "Currency code (or set CURRENCY)",
+    },
+    seller: {
+      type: "string",
+      description:
+        "Local seller id — creates a direct charge on the connected account with an application fee",
+    },
+    "application-fee": {
+      type: "string",
+      description:
+        "Application fee in the smallest currency unit (requires --seller)",
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      if (args["application-fee"] && !args.seller) {
+        throw new Error(
+          "--application-fee requires --seller (application fees only apply to direct charges on a connected account)",
+        )
+      }
+      const { paymentIntent, clientSecret } = await createPaymentIntent({
+        amount: args.amount ? Number(args.amount) : undefined,
+        currency: args.currency,
+        sellerId: args.seller,
+        applicationFeeAmount: args["application-fee"]
+          ? Number(args["application-fee"])
+          : undefined,
+        storePath: args.store,
+      })
+      printJson({
+        ok: true,
+        action: "create-payment-intent",
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status,
+        sellerId: args.seller ?? null,
+        // Returned for the frontend to confirm the payment; never persisted.
+        clientSecret,
+      })
+    })
+  },
+})
+
+const servePaymentCmd = defineCommand({
+  meta: {
+    name: "serve-payment",
+    description:
+      "Serve a local PaymentElement page + signature-verified webhook endpoint",
+  },
+  args: {
+    port: {
+      type: "string",
+      description: "Port to listen on (default 4242)",
+      default: "4242",
+    },
+    path: {
+      type: "string",
+      description: "Webhook path (default /webhooks/stripe)",
+      default: "/webhooks/stripe",
+    },
+    amount: {
+      type: "string",
+      description: "PaymentIntent amount in the smallest currency unit (default 2000)",
+    },
+    currency: {
+      type: "string",
+      description: "Currency code (or set CURRENCY)",
+    },
+    seller: {
+      type: "string",
+      description: "Local seller id — serve direct charges on the connected account",
+    },
+    store: {
+      type: "string",
+      description: "Path to the local Stripe ID store JSON file",
+    },
+  },
+  async run({ args }) {
+    await withEnv(async () => {
+      ensureStripeConfigured()
+      if (!getPublishableKey()) {
+        throw new Error(
+          "STRIPE_PUBLISHABLE_KEY is required. Set it in your environment or .env file (Stripe Dashboard → Developers → API keys).",
+        )
+      }
+      const port = Number(args.port) || 4242
+      const webhookPath = args.path || "/webhooks/stripe"
+      startPaymentServer({
+        port,
+        webhookPath,
+        amount: args.amount ? Number(args.amount) : undefined,
+        currency: args.currency,
+        sellerId: args.seller,
+        storePath: args.store,
+      })
+      console.log(
+        JSON.stringify({
+          ok: true,
+          action: "serve-payment",
+          page: `http://localhost:${port}/`,
+          createPaymentIntent: `http://localhost:${port}/create-payment-intent`,
+          webhook: `http://localhost:${port}${webhookPath}`,
+          health: `http://localhost:${port}/health`,
+          sellerId: args.seller ?? null,
+        }),
+      )
+    })
+  },
+})
+
 export default defineCommand({
   meta: {
     name: "stripe",
@@ -732,6 +862,8 @@ export default defineCommand({
     "create-account-link": createAccountLinkCmd,
     "create-product": createProductCmd,
     "create-checkout-session": createCheckoutSessionCmd,
+    "create-payment-intent": createPaymentIntentCmd,
+    "serve-payment": servePaymentCmd,
     "create-subscription-plan": createSubscriptionPlanCmd,
     "attach-balance-payment-method": attachBalancePaymentMethodCmd,
     "create-subscription": createSubscriptionCmd,
