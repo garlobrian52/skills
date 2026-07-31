@@ -44,6 +44,13 @@ npx @cubic-plugin/cubic-plugin install --to universal
 
 The installer will prompt you for your API key during setup.
 
+To install all bundled skills and commands without configuring the MCP server
+or requiring an API key, use `--skills-only`:
+
+```bash
+npx @cubic-plugin/cubic-plugin install --to cursor --skills-only
+```
+
 To uninstall, use the same `--to` flag:
 
 ```bash
