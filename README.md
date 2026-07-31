@@ -107,7 +107,11 @@ When using JSON mode (`--json`) from another CLI wrapper, installation is intent
 CUBIC_API_KEY="cbk_..." npx -y @cubic-plugin/cubic-plugin install --json --method symlink
 ```
 
-If `CUBIC_API_KEY` is missing, JSON mode returns a structured `install_failed` event with `code: "AUTH_REQUIRED"`.
+JSON mode writes only newline-delimited JSON (NDJSON) to stdout. Every event includes a `type`, schema `version` (`1`), ISO timestamp (`ts`), and a 12-character `runId` shared by all events in that invocation.
+
+A successful full install emits `auth_required` and `auth_success`, followed by `install_started`, a `target_started` and `target_result` pair for each target, `install_summary`, and `install_completed`. If authentication needs user action, the stream instead includes `auth_open_url` and `auth_warning`. `--skills-only` skips authentication and MCP configuration but emits the same install and target events.
+
+Failures end with `install_failed`, whose `code` and `retryable` fields are intended for control flow. Current codes are `UNKNOWN_METHOD`, `UNKNOWN_TARGET`, `AUTH_FAILED`, `AUTH_REQUIRED`, `PLUGIN_RESOLVE_FAILED`, `SYMLINK_NO_LOCAL_SOURCE`, and `TARGET_WRITE_FAILED`. For example, a full install without `CUBIC_API_KEY` exits nonzero with `code: "AUTH_REQUIRED"`.
 
 > **Tip:** In Claude Code, you can also just say "set up my cubic key" and paste your key — the installer will detect your OS and shell and save it automatically.
 
@@ -115,9 +119,11 @@ If `CUBIC_API_KEY` is missing, JSON mode returns a structured `install_failed` e
 
 The CLI sends operational telemetry to PostHog to help maintain the installer. It generates a new random identifier for each CLI process and keeps PostHog state in memory, so it does not persist a user or account identity.
 
-Events cover install start, authentication success, install completion or failure, and uninstall. Properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
+Only five explicit events are sent: `plugin_install_started`, `auth_succeeded`, `plugin_install_completed`, `plugin_install_failed`, and `plugin_uninstalled`. PostHog autocapture, pageview capture, session recording, and persistent storage are disabled.
 
-Telemetry uses a bundled public PostHog project key and the US PostHog endpoint by default. Disable it for a command by setting `POSTHOG_API_KEY` to an empty value:
+Event properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
+
+Telemetry uses a bundled public PostHog project key and `https://us.i.posthog.com` by default. Disable it for a command by setting `POSTHOG_API_KEY` to an empty value:
 
 ```bash
 POSTHOG_API_KEY= npx @cubic-plugin/cubic-plugin install
