@@ -4,13 +4,21 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { access, mkdir, rm, writeFile } from "node:fs/promises"
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { pathToFileURL } from "node:url"
 
 const exec = promisify(execFile)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CLI = path.join(__dirname, "..", "dist", "index.js")
 const TMP_BASE = path.join(__dirname, "..", ".test-output")
+const SKILL_NAMES = [
+  "check-pr-comments",
+  "codebase-context",
+  "cubic-loop",
+  "review-patterns",
+  "run-review",
+]
+const COMMAND_NAMES = ["comments", "learnings", "run-review", "scan", "wiki"]
 
 async function cleanup() {
   await rm(TMP_BASE, { recursive: true, force: true }).catch(() => {})
@@ -50,8 +58,9 @@ describe("install --json --skills-only", () => {
     assert.ok(result)
     assert.equal(result.agent, "claude")
     assert.equal(result.status, "ok")
-    assert.equal(result.skills, 1)
-    assert.equal(result.commands, 1)
+    assert.equal(result.skills, 5)
+    assert.equal(result.commands, 5)
+    assert.equal(result.prompts, 0)
     assert.equal(result.mcpServers, 0)
 
     const summary = events.find((e) => e.type === "install_summary")
@@ -66,6 +75,27 @@ describe("install --json --skills-only", () => {
 
     const runIds = new Set(events.map((e) => e.runId))
     assert.equal(runIds.size, 1, "all events share a single runId")
+
+    const targetRoot = path.join(outDir, "claude")
+    for (const skill of SKILL_NAMES) {
+      await access(path.join(targetRoot, ".claude", "skills", skill, "SKILL.md"))
+    }
+    for (const command of COMMAND_NAMES) {
+      await access(path.join(targetRoot, ".claude", "commands", `${command}.md`))
+    }
+    await assert.rejects(access(path.join(targetRoot, ".mcp.json")))
+
+    const manifest = JSON.parse(
+      await readFile(path.join(targetRoot, ".cubic-manifest.json"), "utf8"),
+    )
+    assert.equal(manifest.entries.length, 10)
+    assert.deepEqual(
+      manifest.entries.map((entry) => entry.file).sort(),
+      [
+        ...SKILL_NAMES.map((name) => `.claude/skills/${name}/SKILL.md`),
+        ...COMMAND_NAMES.map((name) => `.claude/commands/${name}.md`),
+      ].sort(),
+    )
   })
 
   it("produces valid NDJSON for all targets", async () => {
@@ -94,8 +124,98 @@ describe("install --json --skills-only", () => {
 
     const summary = events.find((e) => e.type === "install_summary")
     assert.equal(summary.targetsTotal, 8)
-    assert.equal(summary.skillsTotal, 8)
-    assert.equal(summary.commandsTotal, 8)
+    assert.equal(summary.skillsTotal, 40)
+    assert.equal(summary.commandsTotal, 30)
+    assert.equal(summary.promptsTotal, 10)
+    assert.equal(summary.mcpServersTotal, 0)
+
+    const targetLayouts = {
+      claude: {
+        skills: ".claude/skills",
+        commands: ".claude/commands",
+        commandFile: (name) => `${name}.md`,
+        mcp: ".mcp.json",
+      },
+      opencode: {
+        skills: "skills",
+        commands: "commands",
+        commandFile: (name) => `cubic-${name}.md`,
+        mcp: "opencode.json",
+      },
+      cursor: {
+        skills: "skills",
+        commands: "commands",
+        commandFile: (name) => `cubic-${name}.md`,
+        mcp: "mcp.json",
+      },
+      codex: {
+        skills: "skills",
+        commands: "prompts",
+        commandFile: (name) => `cubic-${name}.md`,
+        mcp: "config.toml",
+      },
+      droid: {
+        skills: "skills",
+        commands: "commands",
+        commandFile: (name) => `cubic-${name}.md`,
+        mcp: "mcp.json",
+      },
+      pi: {
+        skills: "skills",
+        commands: "prompts",
+        commandFile: (name) => `cubic-${name}.md`,
+        mcp: "cubic/mcporter.json",
+      },
+      gemini: {
+        skills: "skills",
+        commands: "commands",
+        commandFile: (name) => `cubic-${name}.toml`,
+        mcp: "settings.json",
+      },
+      universal: {
+        skills: ".agents/skills",
+        commands: ".agents/commands",
+        commandFile: (name) => `cubic-${name}.md`,
+      },
+    }
+
+    for (const [target, layout] of Object.entries(targetLayouts)) {
+      const targetRoot = path.join(outDir, target)
+      for (const skill of SKILL_NAMES) {
+        await access(path.join(targetRoot, layout.skills, skill, "SKILL.md"))
+      }
+      for (const command of COMMAND_NAMES) {
+        await access(
+          path.join(targetRoot, layout.commands, layout.commandFile(command)),
+        )
+      }
+      if (layout.mcp) {
+        await assert.rejects(access(path.join(targetRoot, layout.mcp)))
+      }
+    }
+
+    const geminiCommand = await readFile(
+      path.join(outDir, "gemini", "commands", "cubic-run-review.toml"),
+      "utf8",
+    )
+    assert.match(geminiCommand, /^description = /)
+    assert.match(geminiCommand, /\nprompt = """/)
+
+    const codexManifest = JSON.parse(
+      await readFile(
+        path.join(outDir, "codex", ".cubic-manifest.json"),
+        "utf8",
+      ),
+    )
+    assert.equal(
+      codexManifest.entries.filter((entry) => entry.type === "prompt").length,
+      5,
+    )
+    assert.ok(
+      codexManifest.entries.some(
+        (entry) => entry.file === "prompts/cubic-run-review.md",
+      ),
+    )
   })
 
   it("each NDJSON line is valid JSON parseable by jq", async () => {
@@ -180,7 +300,7 @@ describe("install text mode (backward compatibility)", () => {
 
     assert.ok(stdout.includes("Installing cubic skills"), "has progress text")
     assert.ok(
-      stdout.includes("claude: 1 skill, 1 command"),
+      stdout.includes("claude: 5 skills, 5 commands"),
       "has target summary",
     )
     assert.ok(stdout.includes("Done!"), "has completion message")
