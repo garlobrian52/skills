@@ -1,4 +1,4 @@
-# cubic Plugin for Claude Code
+# cubic Plugin for AI Coding Tools
 
 Access cubic's AI code review insights directly from Claude Code. Get PR review issues, browse AI-generated wikis, check codebase scans, and apply team review learnings — all without leaving your editor.
 
@@ -42,14 +42,11 @@ npx @cubic-plugin/cubic-plugin install --to gemini
 npx @cubic-plugin/cubic-plugin install --to universal
 ```
 
-The installer will prompt you for your API key during setup.
+By default, installs go to the user's home directory under `~` using each tool's standard config location.
+If a target is already installed, the installer skips it; use `--force` to reinstall.
 
-To install all bundled skills and commands without configuring the MCP server
-or requiring an API key, use `--skills-only`:
-
-```bash
-npx @cubic-plugin/cubic-plugin install --to cursor --skills-only
-```
+The installer writes OAuth-ready MCP configuration. It does not ask for a cubic API key.
+After installing, use your coding tool's MCP login flow to authenticate cubic.
 
 To uninstall, use the same `--to` flag:
 
@@ -61,7 +58,6 @@ npx @cubic-plugin/cubic-plugin uninstall --to opencode
 
 - [Claude Code](https://code.claude.com) v1.0.33+
 - A [cubic](https://www.cubic.dev) account with an active installation
-- A cubic API key (`cbk_*`)
 - (Optional) [cubic CLI](https://cubic.dev/install) for `/cubic:run-review`
 
 ## Installation
@@ -102,27 +98,38 @@ When team members open the project in Claude Code and trust the repository, they
 
 ## Setup
 
-The installer will prompt you for your API key during `npx @cubic-plugin/cubic-plugin install`. It opens your browser to the [cubic dashboard](https://www.cubic.dev/settings?tab=integrations&integration=mcp) where you can generate a key, then you paste it in the terminal. The key is saved directly into the MCP configuration.
+The installer writes cubic's MCP server URL into each supported tool:
 
-You can also set `CUBIC_API_KEY` in your environment and the installer will detect it automatically.
+```text
+https://www.cubic.dev/api/mcp
+```
+
+Use OAuth to authenticate from the tool after install:
+
+- Claude Code: run `/mcp`, choose cubic, and complete the browser flow.
+- Cursor: open **Settings** → **Tools and MCP**, then click **Connect** for cubic.
+- Cursor Agent: run `cursor-agent mcp login cubic`.
+- Codex: run `codex mcp login cubic`.
+- Gemini CLI: run `/mcp auth cubic`.
+- OpenCode: run `opencode mcp auth cubic`.
+- Droid: open `/mcp`, choose cubic, and complete the browser flow.
+- Pi: run `/mcp-auth cubic`.
 
 ### Non-interactive JSON mode (for wrappers/installers)
 
-When using JSON mode (`--json`) from another CLI wrapper, installation is intentionally non-interactive. Set `CUBIC_API_KEY` first:
+When using JSON mode (`--json`) from another CLI wrapper, installation is non-interactive and emits NDJSON progress events:
 
 ```bash
-CUBIC_API_KEY="cbk_..." npx -y @cubic-plugin/cubic-plugin install --json --method symlink
+npx -y @cubic-plugin/cubic-plugin install --json --method symlink
 ```
 
-If `CUBIC_API_KEY` is missing, JSON mode returns a structured `install_failed` event with `code: "AUTH_REQUIRED"`.
-
-> **Tip:** In Claude Code, you can also just say "set up my cubic key" and paste your key — the installer will detect your OS and shell and save it automatically.
+No API key is required for JSON mode; users authenticate later through their MCP client.
 
 ## Usage telemetry
 
 The CLI sends operational telemetry to PostHog to help maintain the installer. It generates a new random identifier for each CLI process and keeps PostHog state in memory, so it does not persist a user or account identity.
 
-Events cover install start, authentication success, install completion or failure, and uninstall. Properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
+Events cover install start, install completion or failure, and uninstall. Properties include the selected target, install mode and method, plugin version, result counts, and failure reasons. A failure reason can contain details from an underlying filesystem error, such as a path. The CLI does not add your cubic API key, installed file contents, or source code to these events.
 
 Telemetry uses a bundled public PostHog project key and the US PostHog endpoint by default. Disable it for a command by setting `POSTHOG_API_KEY` to an empty value:
 
@@ -132,7 +139,7 @@ POSTHOG_API_KEY= npx @cubic-plugin/cubic-plugin install
 
 Set the empty value in your environment to opt out persistently. Developers can instead set `POSTHOG_API_KEY` to another project key and optionally set `POSTHOG_HOST` to another endpoint. `npm test` disables telemetry automatically.
 
-> **Note:** `POSTHOG_API_KEY` is an analytics ingestion key. It is separate from the secret `CUBIC_API_KEY` (`cbk_*`) used to authenticate the cubic MCP connection.
+> **Note:** `POSTHOG_API_KEY` is an analytics ingestion key. It is separate from cubic MCP OAuth authentication in your editor.
 
 ## Commands
 
@@ -141,7 +148,7 @@ Set the empty value in your environment to opt out persistently. Developers can 
 | `/cubic:comments [pr-number]`    | Show cubic's review comments on the current PR (auto-detects branch)   |
 | `/cubic:run-review [flags]`      | Run a local cubic AI code review on uncommitted changes or branch diff |
 | `/cubic:wiki [page-name]`        | Browse AI-generated codebase documentation                             |
-| `/cubic:scan [scan-id]`          | View codebase security scan results and issues                    |
+| `/cubic:scan [issue-id]`         | View repository scan results or one issue's full details               |
 | `/cubic:learnings [learning-id]` | Show team code review patterns and preferences                         |
 
 ## Skills (Auto-triggered)
@@ -150,9 +157,10 @@ These activate automatically based on what you're doing:
 
 | Skill                  | Triggers when                                  | What it does                                                       |
 | ---------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
-| **check-pr-comments**    | Working on a PR branch, fixing review comments | Fetches cubic PR comments from GitHub, investigates each, and reports which are worth fixing |
+| **check-pr-comments**    | "Check all PR comments", PR comments/issues, fixing review feedback | Fetches unresolved cubic PR comments, fixes worthwhile issues, commits/pushes, and resolves handled threads |
 | **run-review**         | "Review my code", pre-commit/PR quality checks | Runs a local cubic AI code review via CLI and surfaces issues      |
 | **cubic-loop**         | "Loop until clean", polishing before merge     | Iteratively reviews, fixes, and re-reviews until clean             |
+| **handle-codebase-scan** | Codebase scan requests, CSV exports, or issue UUIDs | Retrieves full findings through MCP, verifies them, and fixes requested issues |
 | **codebase-context**   | Asking about architecture or how things work   | Queries the cubic AI Wiki for architectural context                |
 | **review-patterns**    | Writing or reviewing code                      | Pulls team learnings to apply coding conventions                   |
 
@@ -185,6 +193,8 @@ skills/
 │   ├── run-review/        # Runs local AI code review via cubic CLI
 │   │   └── SKILL.md
 │   ├── cubic-loop/        # Iteratively reviews, fixes, and re-reviews until clean
+│   │   └── SKILL.md
+│   ├── handle-codebase-scan/ # Investigates and fixes codebase scan findings
 │   │   └── SKILL.md
 │   ├── codebase-context/  # Auto-queries wiki for architecture context
 │   │   └── SKILL.md
