@@ -7,23 +7,7 @@ import yaml from "js-yaml"
 
 export type InstallMethod = "paste" | "symlink"
 
-export function inlineApiKey(
-  mcpConfig: Record<string, unknown>,
-  apiKey: string,
-): void {
-  for (const server of Object.values(mcpConfig)) {
-    if (typeof server !== "object" || server === null) continue
-    const headers = (server as Record<string, unknown>).headers as
-      | Record<string, string>
-      | undefined
-    if (!headers) continue
-    for (const [key, value] of Object.entries(headers)) {
-      if (typeof value === "string") {
-        headers[key] = value.replace(/\$\{CUBIC_API_KEY\}/g, apiKey)
-      }
-    }
-  }
-}
+const STABLE_PLUGIN_DIR = path.join(".cubic-plugin", "plugin-source")
 
 export async function pathExists(p: string): Promise<boolean> {
   try {
@@ -40,21 +24,54 @@ export async function installFile(
   method: InstallMethod,
 ): Promise<void> {
   if (method === "symlink") {
-    // Remove existing file/symlink before creating new one
-    try { await fs.unlink(target) } catch {}
-    // Resolve real paths to handle OS-level symlinks (e.g. macOS /var -> /private/var)
-    const realTargetDir = await fs.realpath(path.dirname(target))
-    const realSource = await fs.realpath(source)
-    const relative = path.relative(realTargetDir, realSource)
-    await fs.symlink(relative, target)
+    try {
+      // Remove existing file/symlink before creating new one
+      try { await fs.unlink(target) } catch {}
+      // Resolve real paths to handle OS-level symlinks (e.g. macOS /var -> /private/var)
+      const realTargetDir = await fs.realpath(path.dirname(target))
+      const realSource = await fs.realpath(source)
+      const relative = path.relative(realTargetDir, realSource)
+      await fs.symlink(relative, target)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(
+        `Failed to create symlink at ${target} from ${source}: ${message}`,
+        { cause: err },
+      )
+    }
   } else {
-    await fs.copyFile(source, target)
+    try {
+      await fs.copyFile(source, target)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(
+        `Failed to copy file to ${target} from ${source}: ${message}`,
+        { cause: err },
+      )
+    }
   }
 }
 
 export async function readJson(p: string): Promise<Record<string, unknown>> {
-  const content = await fs.readFile(p, "utf-8")
-  return JSON.parse(content)
+  let content: string
+  try {
+    content = await fs.readFile(p, "utf-8")
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`Failed to read JSON file at ${p}: ${message}`, {
+      cause: err,
+    })
+  }
+
+  try {
+    return JSON.parse(content)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `Invalid JSON in ${p}. Check for comments, trailing commas, or partial edits. ${message}`,
+      { cause: err },
+    )
+  }
 }
 
 export function parseFrontmatter(content: string): {
@@ -172,6 +189,7 @@ export const CUBIC_SKILLS = [
   "check-pr-comments",
   "run-review",
   "cubic-loop",
+  "handle-codebase-scan",
 ]
 
 const LEGACY_CUBIC_SKILLS = [
@@ -282,11 +300,64 @@ export async function resolvePluginRoot(silent?: boolean): Promise<{ pluginRoot:
   return { pluginRoot: await cloneFromGitHub(silent), cloned: true }
 }
 
+function isSubpath(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child)
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+async function isEphemeralPluginRoot(
+  pluginRoot: string,
+  homeDir: string,
+): Promise<boolean> {
+  const realRoot = await fs.realpath(pluginRoot)
+  const npxRoot = path.join(homeDir, ".npm", "_npx")
+  if (isSubpath(npxRoot, realRoot)) return true
+  if (realRoot.split(path.sep).includes("_npx")) return true
+
+  const tempRoot = await fs.realpath(os.tmpdir())
+  if (!isSubpath(tempRoot, realRoot)) return false
+
+  return path.basename(realRoot).startsWith("cubic-plugin-install-")
+}
+
+async function copyDirectory(source: string, target: string): Promise<void> {
+  await fs.cp(source, target, { recursive: true })
+}
+
+export async function resolveInstallPluginRoot(
+  pluginRoot: string,
+  method: InstallMethod,
+  options: { homeDir?: string } = {},
+): Promise<string> {
+  if (method !== "symlink") return pluginRoot
+
+  const homeDir = options.homeDir ?? os.homedir()
+  if (!(await isEphemeralPluginRoot(pluginRoot, homeDir))) {
+    return pluginRoot
+  }
+
+  const stableRoot = path.join(homeDir, STABLE_PLUGIN_DIR)
+  const parentDir = path.dirname(stableRoot)
+  await fs.mkdir(parentDir, { recursive: true })
+  const stagingDir = await fs.mkdtemp(path.join(parentDir, "plugin-source-"))
+  const stagedRoot = path.join(stagingDir, "plugin-source")
+
+  try {
+    await copyDirectory(pluginRoot, stagedRoot)
+    await fs.rm(stableRoot, { recursive: true, force: true })
+    await fs.rename(stagedRoot, stableRoot)
+  } finally {
+    await fs.rm(stagingDir, { recursive: true, force: true })
+  }
+
+  return stableRoot
+}
+
 async function cloneFromGitHub(silent?: boolean): Promise<string> {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), "cubic-plugin-install-"),
   )
-  const repo = "https://github.com/mrge-io/cubic-claude-plugin"
+  const repo = "https://github.com/mrge-io/skills"
   if (!silent) console.log("Fetching latest plugin from GitHub...")
   try {
     execFileSync("git", ["clone", "--depth", "1", repo, tempDir], {
@@ -307,164 +378,158 @@ export type CommandFormat = "original" | "stripped" | "toml"
 export interface TargetLayout {
   skillsDir: (root: string) => string
   commandDir: (root: string) => string
-  commandType: "command" | "prompt"
   commandFormat: CommandFormat
   commandFilename: (source: string) => string
+}
+
+// Home-relative paths whose presence indicates the agent is installed.
+// `universal` is intentionally absent: it's an opt-in fallback, not a detected agent.
+export const AGENT_MARKERS: Record<string, string[]> = {
+  claude: [".claude", ".claude.json"],
+  cursor: [".cursor"],
+  codex: [".codex"],
+  droid: [".factory"],
+  gemini: [".gemini"],
+  opencode: [
+    path.join(".config", "opencode"),
+    path.join(".local", "share", "opencode"),
+  ],
+  pi: [".pi"],
+}
+
+export async function isAgentDetected(
+  name: string,
+  homeDir: string = os.homedir(),
+): Promise<boolean> {
+  const markers = AGENT_MARKERS[name]
+  if (!markers) return false
+  for (const marker of markers) {
+    if (await pathExists(path.join(homeDir, marker))) return true
+  }
+  return false
 }
 
 export const TARGET_LAYOUTS: Record<string, TargetLayout> = {
   claude: {
     skillsDir: (root) => path.join(root, ".claude", "skills"),
     commandDir: (root) => path.join(root, ".claude", "commands"),
-    commandType: "command",
     commandFormat: "original",
     commandFilename: (s) => s,
   },
   opencode: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
-    commandType: "command",
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
   },
   cursor: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
-    commandType: "command",
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
   },
   codex: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "prompts"),
-    commandType: "prompt",
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
   },
   droid: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
-    commandType: "command",
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
   },
   pi: {
-    skillsDir: (root) => path.join(root, "skills"),
-    commandDir: (root) => path.join(root, "prompts"),
-    commandType: "prompt",
+    skillsDir: (root) => path.join(root, ".pi", "agent", "skills"),
+    commandDir: (root) => path.join(root, ".pi", "agent", "prompts"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
   },
   gemini: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
-    commandType: "command",
     commandFormat: "toml",
     commandFilename: (s) => `cubic-${s.replace(/\.md$/, ".toml")}`,
   },
   universal: {
     skillsDir: (root) => path.join(root, ".agents", "skills"),
     commandDir: (root) => path.join(root, ".agents", "commands"),
-    commandType: "command",
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
   },
 }
 
+
 async function installCommandFile(
-  source: string,
-  target: string,
-  format: CommandFormat,
+  pluginRoot: string,
+  commandDir: string,
+  layout: TargetLayout,
+  sourceFilename: string,
   method: InstallMethod,
-): Promise<void> {
-  if (format === "original") {
-    await installFile(source, target, method)
-    return
+): Promise<boolean> {
+  const source = path.join(pluginRoot, "commands", sourceFilename)
+  if (!(await pathExists(source))) return false
+
+  const targetFilename = layout.commandFilename(sourceFilename)
+
+  if (layout.commandFormat === "original") {
+    await installFile(source, path.join(commandDir, targetFilename), method)
+    return true
   }
 
   const content = await fs.readFile(source, "utf-8")
   const { data, body } = parseFrontmatter(content)
 
-  if (format === "stripped") {
+  if (layout.commandFormat === "stripped") {
     const stripped: Record<string, unknown> = {}
     if (data.description) stripped.description = data.description
-    await fs.writeFile(target, formatFrontmatter(stripped, body))
-    return
+    await fs.writeFile(
+      path.join(commandDir, targetFilename),
+      formatFrontmatter(stripped, body),
+    )
+  } else {
+    const escaped = body.trim().replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"')
+    const toml = [
+      `description = ${JSON.stringify(String(data.description ?? ""))}`,
+      'prompt = """',
+      escaped,
+      '"""',
+      "",
+    ].join("\n")
+    await fs.writeFile(path.join(commandDir, targetFilename), toml)
   }
-
-  const escaped = body.trim().replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"')
-  const toml = [
-    `description = ${JSON.stringify(String(data.description ?? ""))}`,
-    'prompt = """',
-    escaped,
-    '"""',
-    "",
-  ].join("\n")
-  await fs.writeFile(target, toml)
+  return true
 }
 
-export async function installCommands(
+export async function installAllCommands(
   pluginRoot: string,
   commandDir: string,
   layout: TargetLayout,
   method: InstallMethod = "paste",
 ): Promise<number> {
-  const sourceDir = path.join(pluginRoot, "commands")
-  if (!(await pathExists(sourceDir))) return 0
+  const cmdSource = path.join(pluginRoot, "commands")
+  if (!(await pathExists(cmdSource))) return 0
 
   await fs.mkdir(commandDir, { recursive: true })
-  const files = (await fs.readdir(sourceDir))
-    .filter((file) => file.endsWith(".md"))
-    .sort()
 
-  for (const file of files) {
-    await installCommandFile(
-      path.join(sourceDir, file),
-      path.join(commandDir, layout.commandFilename(file)),
-      layout.commandFormat,
-      method,
-    )
+  let count = 0
+  for (const file of await fs.readdir(cmdSource)) {
+    if (!file.endsWith(".md")) continue
+    if (await installCommandFile(pluginRoot, commandDir, layout, file, method)) {
+      count++
+    }
   }
-
-  return files.length
-}
-
-export async function installReviewSkill(
-  pluginRoot: string,
-  skillsDir: string,
-  method: InstallMethod = "paste",
-): Promise<boolean> {
-  const source = path.join(pluginRoot, "skills", "run-review", "SKILL.md")
-  if (!(await pathExists(source))) return false
-  const targetDir = path.join(skillsDir, "run-review")
-  await fs.mkdir(targetDir, { recursive: true })
-  await installFile(source, path.join(targetDir, "SKILL.md"), method)
-  return true
-}
-
-export async function installReviewCommand(
-  pluginRoot: string,
-  commandDir: string,
-  layout: TargetLayout,
-  method: InstallMethod = "paste",
-): Promise<boolean> {
-  const source = path.join(pluginRoot, "commands", "run-review.md")
-  if (!(await pathExists(source))) return false
-  await fs.mkdir(commandDir, { recursive: true })
-
-  const targetFilename = layout.commandFilename("run-review.md")
-  await installCommandFile(
-    source,
-    path.join(commandDir, targetFilename),
-    layout.commandFormat,
-    method,
-  )
-  return true
+  return count
 }
 
 // --- Manifest tracking ---
 
-export const MANIFEST_FILENAME = ".cubic-manifest.json"
+export const LEGACY_MANIFEST_FILENAME = ".cubic-manifest.json"
+
+export function manifestFilename(target: string): string {
+  return `.cubic-manifest.${target}.json`
+}
 
 export interface ManifestEntry {
   name: string
@@ -500,25 +565,41 @@ export async function readPluginVersion(pluginRoot: string): Promise<string> {
   }
 }
 
+export async function readLocalPluginVersion(): Promise<string> {
+  return readPluginVersion(path.resolve(__dirname, ".."))
+}
+
 export async function writeManifest(
   outputRoot: string,
   manifest: CubicManifest,
 ): Promise<void> {
   await fs.mkdir(outputRoot, { recursive: true })
   await fs.writeFile(
-    path.join(outputRoot, MANIFEST_FILENAME),
+    path.join(outputRoot, manifestFilename(manifest.target)),
     JSON.stringify(manifest, null, 2) + "\n",
   )
 }
 
 export async function readManifest(
   outputRoot: string,
+  target?: string,
 ): Promise<CubicManifest | null> {
-  const p = path.join(outputRoot, MANIFEST_FILENAME)
-  if (!(await pathExists(p))) return null
-  try {
-    return (await readJson(p)) as unknown as CubicManifest
-  } catch {
-    return null
+  const filenames = target
+    ? [manifestFilename(target), LEGACY_MANIFEST_FILENAME]
+    : [LEGACY_MANIFEST_FILENAME]
+
+  for (const filename of filenames) {
+    const manifestPath = path.join(outputRoot, filename)
+    if (!(await pathExists(manifestPath))) continue
+    try {
+      const manifest = (await readJson(manifestPath)) as unknown as CubicManifest
+      if (!target || manifest.target === target) {
+        return manifest
+      }
+    } catch {
+      continue
+    }
   }
+
+  return null
 }
