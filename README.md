@@ -14,7 +14,7 @@ Access cubic's AI code review insights directly from Claude Code. Get PR review 
 ## CLI Install
 
 ```bash
-# All targets (default)
+# Detected home-directory tools (default when --to all and no --output)
 npx @cubic-plugin/cubic-plugin install
 
 # Claude Code
@@ -38,20 +38,72 @@ npx @cubic-plugin/cubic-plugin install --to pi
 # Gemini CLI
 npx @cubic-plugin/cubic-plugin install --to gemini
 
-# Universal (.agents/skills)
+# Universal (.agents/skills) — opt-in; never auto-detected
 npx @cubic-plugin/cubic-plugin install --to universal
 ```
 
-By default, installs go to the user's home directory under `~` using each tool's standard config location.
-If a target is already installed, the installer skips it; use `--force` to reinstall.
+### Default install behavior
 
-The installer writes OAuth-ready MCP configuration. It does not ask for a cubic API key.
-After installing, use your coding tool's MCP login flow to authenticate cubic.
+- With `--to all` and no `--output`, the installer only installs into agents it detects via home-directory markers (for example `~/.cursor`, `~/.codex`, `~/.claude`). Undetected agents are skipped (`target_skipped` / `not_detected` in JSON mode).
+- If nothing is detected, the command exits successfully and tells you to pass `--to <target>` or `--to universal`.
+- Pass `--to <target>` to install a specific agent even when it is not detected.
+- Pass `--output <dir>` to write under `<dir>/<target>/` and skip auto-detection (useful for sandboxing all targets).
+- Default roots are each tool's home config location (not the current working directory).
+- If a target is already installed at the matching plugin version/method/layout, the installer skips it. `--force` reinstalls selected/detected targets; it does not change which targets are selected by auto-detection.
+- Full installs write OAuth-ready MCP configuration and never ask for a cubic API key. Authenticate later through your editor's MCP login flow.
+- `--skills-only` installs the full skills and commands/prompts bundle and skips MCP entirely.
 
-To uninstall, use the same `--to` flag:
+### Migrating from API-key MCP configs
+
+Older installs may still have cubic MCP entries with `Authorization` headers, `CUBIC_API_KEY`, or Codex `http_headers`. Those configs are treated as incomplete, so a normal reinstall rewrites them to OAuth-ready entries (no headers). Recommended:
+
+```bash
+npx @cubic-plugin/cubic-plugin install --to all --force
+```
+
+Do not add API keys to MCP config by hand. Existing `cbk_*` values may appear in legacy files during migration — never commit or log them.
+
+### Install options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--to <target>` | `all` | `claude`, `opencode`, `codex`, `cursor`, `droid`, `pi`, `gemini`, `universal`, or `all` |
+| `-o, --output <dir>` | per-target home root | Write under `<dir>/<target>/` and disable auto-detection |
+| `--skills-only` | `false` | Install skills + commands/prompts only (no MCP config) |
+| `--json` | `false` | Emit NDJSON progress events on stdout (non-interactive) |
+| `--method paste\|symlink` | `paste` | Copy files, or symlink when the source is stable |
+| `--force` | `false` | Reinstall even when the target already matches the current install |
+
+`symlink` from ephemeral `npx`/temp sources materializes a stable copy under `~/.cubic-plugin/plugin-source` so links keep working after the temp directory is removed. Transformed commands (stripped frontmatter / Gemini TOML) are always copied.
+
+### Default install locations and MCP shapes
+
+| Target | Default root | MCP config | OAuth-ready entry |
+| --- | --- | --- | --- |
+| Claude Code | `~` | `.mcp.json` | `mcpServers.cubic`: `{ type: "http", url }` |
+| Cursor | `~/.cursor` | `mcp.json` | `mcpServers.cubic`: `{ type: "http", url }` |
+| OpenCode | `~/.config/opencode` | `opencode.json` | `mcp.cubic`: `{ type: "remote", url, enabled: true }` |
+| Codex | `~/.codex` | `config.toml` | `[mcp_servers.cubic]` with `url` only (no `http_headers`) |
+| Factory Droid | `~/.factory` | `mcp.json` | `mcpServers.cubic`: `{ type: "http", url, disabled: false }` |
+| Pi | `~` | `.config/mcp/mcp.json` | `mcpServers.cubic`: `{ auth: "oauth", url }` |
+| Gemini CLI | `~/.gemini` | `settings.json` | `mcpServers.cubic`: `{ httpUrl }` |
+| Universal | `~` | _(none)_ | Skills/commands only under `.agents/` |
+
+All MCP URLs point at `https://www.cubic.dev/api/mcp`. Each successful install also writes `.cubic-manifest.<target>.json` at the destination root (legacy `.cubic-manifest.json` is still read for skip/reinstall detection).
+
+To uninstall skills/commands and remove the cubic MCP entry for a target:
 
 ```bash
 npx @cubic-plugin/cubic-plugin uninstall --to opencode
+```
+
+`uninstall` does not delete manifests. For a full home cleanup that also removes manifests (developers working from this repo):
+
+```bash
+npm run clean:home:dry-run -- --to cursor
+npm run clean:home -- --to cursor
+# or all targets:
+npm run clean:home
 ```
 
 ## Prerequisites
@@ -120,10 +172,32 @@ Use OAuth to authenticate from the tool after install:
 When using JSON mode (`--json`) from another CLI wrapper, installation is non-interactive and emits NDJSON progress events:
 
 ```bash
-npx -y @cubic-plugin/cubic-plugin install --json --method symlink
+npx -y @cubic-plugin/cubic-plugin install --json --to claude --output /tmp/cubic-plugin-out
 ```
 
-No API key is required for JSON mode; users authenticate later through their MCP client.
+No API key is required for JSON mode; users authenticate later through their MCP client. Each event includes `type`, `version` (`1`), `ts`, and `runId`, plus event-specific fields:
+
+| `type` | Meaning |
+| --- | --- |
+| `install_started` | Install began (`mode`: `full` \| `skills-only`, `method`, `target`, `pluginVersion`) |
+| `target_started` | A target install began |
+| `target_skipped` | Target skipped (`reason`: currently `not_detected`) |
+| `target_result` | Per-target counts and `status` (`ok` \| `failed`) |
+| `install_summary` | Aggregated totals across targets |
+| `install_completed` | Successful completion (`ok: true`) |
+| `install_failed` | Fatal failure (`code`, `message`, `retryable`) |
+
+There is no `auth_required` (or other API-key setup) event after the OAuth switch. Common `install_failed` codes include `UNKNOWN_TARGET`, `UNKNOWN_METHOD`, and `PLUGIN_RESOLVE_FAILED`.
+
+### Troubleshooting
+
+| Symptom | What to try |
+| --- | --- |
+| `No supported AI coding tools detected` | Install/open the editor once so its home marker exists, or pass `--to <target>` / `--to universal` |
+| MCP tools return auth errors | Complete the editor MCP login flow listed above; reconnect if a prior API-key config was migrated |
+| Install keeps rewriting MCP config | Legacy header/`http_headers` entries are intentionally migrated to OAuth on reinstall |
+| Symlinks break after `npx` | Re-run with `--method symlink`; ephemeral sources are copied to `~/.cubic-plugin/plugin-source` |
+| Want a clean local retest | `npm run clean:home:dry-run`, then `npm run clean:home`, then install again with `--output` or `--force` |
 
 ## Usage telemetry
 
