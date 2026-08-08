@@ -380,6 +380,8 @@ export interface TargetLayout {
   commandDir: (root: string) => string
   commandFormat: CommandFormat
   commandFilename: (source: string) => string
+  /** Whether installed command files are reported as commands or prompts. */
+  outputType: "command" | "prompt"
 }
 
 // Home-relative paths whose presence indicates the agent is installed.
@@ -415,48 +417,56 @@ export const TARGET_LAYOUTS: Record<string, TargetLayout> = {
     commandDir: (root) => path.join(root, ".claude", "commands"),
     commandFormat: "original",
     commandFilename: (s) => s,
+    outputType: "command",
   },
   opencode: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
   cursor: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
   codex: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "prompts"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "prompt",
   },
   droid: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
   pi: {
     skillsDir: (root) => path.join(root, ".pi", "agent", "skills"),
     commandDir: (root) => path.join(root, ".pi", "agent", "prompts"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "prompt",
   },
   gemini: {
     skillsDir: (root) => path.join(root, "skills"),
     commandDir: (root) => path.join(root, "commands"),
     commandFormat: "toml",
     commandFilename: (s) => `cubic-${s.replace(/\.md$/, ".toml")}`,
+    outputType: "command",
   },
   universal: {
     skillsDir: (root) => path.join(root, ".agents", "skills"),
     commandDir: (root) => path.join(root, ".agents", "commands"),
     commandFormat: "stripped",
     commandFilename: (s) => `cubic-${s}`,
+    outputType: "command",
   },
 }
 

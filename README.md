@@ -40,6 +40,9 @@ npx @cubic-plugin/cubic-plugin install --to gemini
 
 # Universal (.agents/skills)
 npx @cubic-plugin/cubic-plugin install --to universal
+
+# Skills and companion commands only (no MCP configuration)
+npx @cubic-plugin/cubic-plugin install --skills-only
 ```
 
 By default, installs go to the user's home directory under `~` using each tool's standard config location.
@@ -47,6 +50,7 @@ If a target is already installed, the installer skips it; use `--force` to reins
 
 The installer writes OAuth-ready MCP configuration. It does not ask for a cubic API key.
 After installing, use your coding tool's MCP login flow to authenticate cubic.
+`--skills-only` installs all bundled skills and commands/prompts without writing MCP configuration.
 
 To uninstall, use the same `--to` flag:
 
