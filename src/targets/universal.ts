@@ -1,4 +1,5 @@
 import path from "path"
+import os from "os"
 import { promises as fs } from "fs"
 import type { Target, TargetResult } from "./index.js"
 import type { InstallMethod } from "../utils.js"
@@ -19,7 +20,7 @@ const CUBIC_COMMANDS = [
 ]
 
 export const universal: Target = {
-  async install(pluginRoot: string, outputRoot: string, _apiKey?: string, method: InstallMethod = "paste"): Promise<TargetResult> {
+  async install(pluginRoot: string, outputRoot: string, method: InstallMethod = "paste"): Promise<TargetResult> {
     const agentsDir = path.join(outputRoot, ".agents")
     const skillCount = await installSkills(pluginRoot, path.join(agentsDir, "skills"), method)
 
@@ -56,6 +57,6 @@ export const universal: Target = {
   },
 
   defaultRoot(): string {
-    return process.cwd()
+    return os.homedir()
   },
 }

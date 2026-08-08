@@ -8,7 +8,7 @@ const main = defineCommand({
   meta: {
     name: "cubic-plugin",
     version: "1.0.0",
-    description: "Install cubic AI code review plugin for OpenCode",
+    description: "Install cubic AI code review skills and MCP configuration for AI coding tools",
   },
   subCommands: {
     install: () => install,
