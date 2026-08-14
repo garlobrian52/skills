@@ -411,7 +411,7 @@ async function buildManifestEntries(
       const cmdMethod = layout && layout.commandFormat !== "original" ? "paste" as InstallMethod : method
       entries.push({
         name: file.replace(/\.md$/, ""),
-        type: "command",
+        type: layout?.outputType ?? "command",
         file: outName,
         method: cmdMethod,
       })
@@ -680,7 +680,7 @@ export default defineCommand({
               layout.skillsDir(outputRoot),
               method,
             )
-            const commands = await installAllCommands(
+            const commandCount = await installAllCommands(
               pluginRoot,
               layout.commandDir(outputRoot),
               layout,
@@ -689,8 +689,8 @@ export default defineCommand({
             entry = {
               agent: name,
               skills,
-              commands,
-              prompts: 0,
+              commands: layout.outputType === "command" ? commandCount : 0,
+              prompts: layout.outputType === "prompt" ? commandCount : 0,
               mcpServers: 0,
               status: "ok",
               reason: null,
