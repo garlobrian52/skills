@@ -280,6 +280,53 @@ def slide_funding(prs):
         "but also strengthens our ESG ratings, appealing to institutional investors and lowering our cost of capital.")
 
 
+def slide_merchant_services(prs):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, WHITE)
+
+    add_textbox(slide, Inches(0.7), Inches(0.5), Inches(6), Inches(1.0),
+                "Merchant Services: Empowering Sellers with iPhone Air",
+                size=24, bold=True, color=DARK)
+
+    bullets = [
+        "Tap to Pay on iPhone: Accept contactless payments with no extra hardware.",
+        "Apple Pay for Business: Faster checkout and higher conversion.",
+        "Seller Upgrade Path: Equip partners with iPhone Air from $999.",
+    ]
+    top = 1.8
+    for b in bullets:
+        add_textbox(slide, Inches(0.9), Inches(top), Inches(5.8), Inches(0.7), f"•  {b}", size=14, color=DARK)
+        top += 0.75
+
+    add_textbox(slide, Inches(0.9), Inches(4.2), Inches(5.5), Inches(0.4),
+                "apple.com/shop/buy-iphone/iphone-air", size=12, bold=True, color=APPLE_GREEN)
+
+    # iPhone frame placeholder
+    device = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(8.5), Inches(1.5), Inches(2.2), Inches(4.2))
+    device.fill.solid()
+    device.fill.fore_color.rgb = RGBColor(0x1D, 0x1D, 0x1F)
+    device.line.fill.background()
+
+    screen = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(8.7), Inches(1.8), Inches(1.8), Inches(3.4))
+    screen.fill.solid()
+    screen.fill.fore_color.rgb = LIGHT_BG
+    screen.line.fill.background()
+
+    add_textbox(slide, Inches(8.7), Inches(2.8), Inches(1.8), Inches(0.4),
+                "Tap to Pay", size=11, bold=True, color=DARK, align=PP_ALIGN.CENTER)
+    add_textbox(slide, Inches(8.7), Inches(3.2), Inches(1.8), Inches(0.5),
+                "$999.00", size=16, bold=True, color=APPLE_GREEN, align=PP_ALIGN.CENTER)
+
+    add_textbox(slide, Inches(7.8), Inches(6.0), Inches(3.8), Inches(0.5),
+                "The thinnest iPhone ever — now your sellers' point of sale.",
+                size=10, color=GRAY, align=PP_ALIGN.CENTER)
+
+    add_speaker_notes(slide,
+        "Merchant Services extends our environmental and premium-brand story into the seller ecosystem. "
+        "iPhone Air enables Tap to Pay on iPhone — sellers accept Apple Pay and contactless cards with no "
+        "additional hardware. Direct sellers to apple.com/shop/buy-iphone/iphone-air for fleet upgrades.")
+
+
 def slide_action(prs):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_slide_bg(slide, WHITE)
@@ -295,12 +342,14 @@ def slide_action(prs):
          'Equip Apple Store teams with "17 Billion Gallons Saved" talking points for customer engagement.'),
         ("3", "Marketing",
          "Launch a campaign highlighting the 100% plastic-free unboxing experience as a premium feature."),
+        ("4", "Merchant Services",
+         "Onboard sellers to Tap to Pay on iPhone Air — apple.com/shop/buy-iphone/iphone-air"),
     ]
 
     for i, (num, title, desc) in enumerate(steps):
-        left = 0.7 + i * 4.2
+        left = 0.5 + i * 3.15
         shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(2.0),
-                                       Inches(3.8), Inches(3.8))
+                                       Inches(2.9), Inches(3.8))
         shape.fill.solid()
         shape.fill.fore_color.rgb = LIGHT_BG
         shape.line.fill.background()
@@ -313,10 +362,10 @@ def slide_action(prs):
         add_textbox(slide, Inches(left + 0.3), Inches(2.35), Inches(0.5), Inches(0.4),
                     num, size=14, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
 
-        add_textbox(slide, Inches(left + 0.3), Inches(3.0), Inches(3.2), Inches(0.5),
-                    title, size=16, bold=True, color=DARK)
-        add_textbox(slide, Inches(left + 0.3), Inches(3.6), Inches(3.2), Inches(1.5),
-                    desc, size=12, color=GRAY)
+        add_textbox(slide, Inches(left + 0.25), Inches(3.0), Inches(2.4), Inches(0.5),
+                    title, size=14, bold=True, color=DARK)
+        add_textbox(slide, Inches(left + 0.25), Inches(3.6), Inches(2.4), Inches(1.8),
+                    desc, size=10, color=GRAY)
 
     add_speaker_notes(slide,
         "We are directing Sales and Marketing to immediately integrate these FY25 wins into their "
@@ -337,6 +386,7 @@ def main():
     slide_efficiency(prs)
     slide_emissions(prs)
     slide_funding(prs)
+    slide_merchant_services(prs)
     slide_action(prs)
 
     prs.save(str(OUTPUT))

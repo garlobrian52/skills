@@ -13,7 +13,8 @@ Board-ready slide deck demonstrating how Apple's **Apple 2030** initiative drive
 | 5 | Operational Efficiency — Stewarding Resources to Protect Margins |
 | 6 | Targeting Emissions Where They Matter to the Customer |
 | 7 | Funding the Transition — ROI on Environmental Programs |
-| 8 | Leveraging FY25 Wins in the Market (Action Plan) |
+| 8 | Merchant Services — Empowering Sellers with iPhone Air |
+| 9 | Leveraging FY25 Wins in the Market (Action Plan) |
 
 ## View the Deck
 

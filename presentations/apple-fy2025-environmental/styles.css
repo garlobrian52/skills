@@ -462,6 +462,107 @@ h3 {
 .trend-dot { fill: var(--apple-green); }
 .trend-bar { fill: var(--apple-green); }
 
+/* ── Merchant Services Slide ── */
+.merchant-device-card {
+  text-align: center;
+  max-width: 320px;
+}
+
+.device-frame {
+  background: linear-gradient(145deg, #2c2c2e 0%, #1d1d1f 100%);
+  border-radius: 36px;
+  padding: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  margin: 0 auto 1.25rem;
+  width: 200px;
+}
+
+.device-screen {
+  background: var(--bg-light);
+  border-radius: 28px;
+  aspect-ratio: 9/19;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+}
+
+.tap-to-pay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nfc-icon {
+  width: 56px;
+  height: 56px;
+  color: var(--apple-green-dark);
+}
+
+.tap-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tap-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--apple-green-dark);
+}
+
+.device-specs {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.spec-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.3em 0.7em;
+  border-radius: 100px;
+  background: var(--bg-light);
+  color: var(--text-secondary);
+}
+
+.device-tagline {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.product-cta {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--apple-green-dark);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 100px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.product-cta:hover {
+  background: var(--apple-green);
+  transform: translateY(-1px);
+}
+
+.slide-action .timeline-step a {
+  color: var(--apple-green-dark);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.slide-action .timeline-step a:hover {
+  text-decoration: underline;
+}
+
 /* ── Timeline / Action Plan ── */
 .timeline {
   display: flex;
@@ -472,6 +573,7 @@ h3 {
 
 .timeline-step {
   flex: 1;
+  min-width: 0;
   background: var(--bg-light);
   border-radius: 16px;
   padding: 1.75rem 1.5rem;
@@ -608,6 +710,10 @@ h3 {
     transform: rotate(90deg);
     justify-content: center;
     padding: 0.25rem 0;
+  }
+
+  .slide-merchant .split {
+    flex-direction: column !important;
   }
 
   .progress-rings {
