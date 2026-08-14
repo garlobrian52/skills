@@ -1,0 +1,738 @@
+/* Apple FY2025 Environmental Progress — Presentation Styles */
+
+:root {
+  --apple-green: #30d158;
+  --apple-green-dark: #1a7f37;
+  --apple-green-light: #a8e6bc;
+  --apple-green-mid: #5ac878;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --bg-white: #ffffff;
+  --bg-light: #f5f5f7;
+  --bg-nature: linear-gradient(165deg, #e8f5e9 0%, #f5f5f7 40%, #e3f2fd 100%);
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --slide-padding: 64px 80px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-system);
+  color: var(--text-primary);
+  background: #000;
+  -webkit-font-smoothing: antialiased;
+}
+
+.deck {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-white);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0.45s;
+  padding: var(--slide-padding);
+  overflow: hidden;
+}
+
+.slide.active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 1;
+}
+
+.slide-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+.slide-content.center {
+  align-items: center;
+  text-align: center;
+}
+
+h1 {
+  font-size: clamp(2rem, 4.5vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  max-width: 900px;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 2.8vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 2.5rem;
+  max-width: 720px;
+}
+
+h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
+  color: var(--text-secondary);
+  margin-top: 1rem;
+  font-weight: 400;
+}
+
+.eyebrow {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--apple-green-dark);
+  margin-bottom: 1.25rem;
+}
+
+.slide-footer {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding-top: 1rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Title Slide ── */
+.slide-title {
+  background: var(--bg-nature);
+}
+
+.title-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.aluminum-texture {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.03) 2px,
+      rgba(255, 255, 255, 0.03) 4px
+    ),
+    linear-gradient(180deg, rgba(200, 210, 220, 0.3) 0%, rgba(230, 235, 240, 0.5) 50%, rgba(200, 220, 210, 0.3) 100%);
+  opacity: 0.6;
+}
+
+.product-silhouette {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  opacity: 0.15;
+}
+
+.device {
+  background: var(--text-primary);
+  border-radius: 12px;
+}
+
+.device.phone { width: 48px; height: 96px; border-radius: 10px; }
+.device.tablet { width: 80px; height: 110px; border-radius: 8px; }
+.device.laptop { width: 140px; height: 90px; border-radius: 8px 8px 4px 4px; }
+
+/* ── Bento Grid ── */
+.bento-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-width: 880px;
+}
+
+.bento-card {
+  background: var(--bg-light);
+  border-radius: 20px;
+  padding: 2rem 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.2s ease;
+}
+
+.bento-card:hover {
+  transform: translateY(-2px);
+}
+
+.bento-card .stat {
+  font-size: clamp(2.5rem, 5vw, 3.75rem);
+  font-weight: 700;
+  color: var(--apple-green-dark);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.bento-card p {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+/* ── Split Layout ── */
+.split {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 3rem;
+}
+
+.split-left, .split-right {
+  flex: 1;
+}
+
+.split-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Metric Lists ── */
+.metric-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.metric-list li {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.metric-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--apple-green);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2em 0.6em;
+  border-radius: 100px;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+
+.badge.achieved {
+  background: var(--apple-green);
+  color: #fff;
+}
+
+.detail {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}
+
+/* ── Progress Rings ── */
+.progress-rings {
+  display: flex;
+  gap: 2.5rem;
+}
+
+.progress-ring {
+  width: 140px;
+  height: 140px;
+}
+
+.ring-bg {
+  fill: none;
+  stroke: #e8e8ed;
+  stroke-width: 8;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: var(--apple-green);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: calc(2 * 3.14159 * 52);
+  stroke-dashoffset: calc(2 * 3.14159 * 52 * (1 - var(--progress) / 100));
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 1s ease;
+}
+
+.ring-fill.partial {
+  stroke: var(--apple-green-dark);
+}
+
+.ring-label {
+  text-anchor: middle;
+  font-size: 22px;
+  font-weight: 700;
+  fill: var(--text-primary);
+  font-family: var(--font-system);
+}
+
+.ring-sublabel {
+  text-anchor: middle;
+  font-size: 11px;
+  fill: var(--text-secondary);
+  font-family: var(--font-system);
+}
+
+/* ── Exploded Device ── */
+.exploded-device {
+  width: 100%;
+  max-width: 400px;
+}
+
+.device-body { fill: #d2d2d7; }
+.component { fill: var(--apple-green-light); stroke: var(--apple-green-dark); stroke-width: 1.5; }
+.component.battery { fill: #b8dfc4; }
+.component.magnet { fill: var(--apple-green); }
+.callout-line { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 4 3; }
+.callout-label { font-size: 12px; font-weight: 600; fill: var(--text-primary); font-family: var(--font-system); }
+.callout-detail { font-size: 10px; fill: var(--text-secondary); font-family: var(--font-system); }
+
+/* ── Icon Row ── */
+.icon-row {
+  display: flex;
+  gap: 2rem;
+  justify-content: center;
+}
+
+.icon-card {
+  flex: 1;
+  max-width: 280px;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  background: var(--bg-light);
+  border-radius: 20px;
+  box-shadow: var(--shadow-soft);
+}
+
+.icon {
+  width: 64px;
+  height: 64px;
+  color: var(--apple-green-dark);
+  margin: 0 auto 1rem;
+}
+
+.icon-stat {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--apple-green-dark);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.icon-card p {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+/* ── Donut Chart ── */
+.emissions-legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.emissions-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.emissions-legend li.highlight {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot.manufacturing { background: var(--apple-green-dark); }
+.dot.product-use { background: var(--apple-green-mid); }
+.dot.transport { background: var(--apple-green-light); }
+.dot.operations { background: #e8e8ed; }
+
+.donut-chart {
+  width: 260px;
+  height: 260px;
+}
+
+.donut-center {
+  font-size: 16px;
+  font-weight: 600;
+  fill: var(--text-primary);
+  font-family: var(--font-system);
+}
+
+.donut-center-sub {
+  font-size: 22px;
+  font-weight: 700;
+  fill: var(--apple-green-dark);
+  font-family: var(--font-system);
+}
+
+/* ── Funding Slide ── */
+.mega-stat {
+  margin: 2rem 0 1.5rem;
+}
+
+.stat-number {
+  font-size: clamp(4rem, 10vw, 6.5rem);
+  font-weight: 700;
+  color: var(--apple-green-dark);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.stat-number.small {
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.stat-unit {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.25rem;
+}
+
+.stat-desc {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  line-height: 1.45;
+}
+
+.secondary-stat {
+  padding-top: 1rem;
+  border-top: 1px solid #e8e8ed;
+}
+
+.certificate { fill: #f0faf2; stroke: var(--apple-green); stroke-width: 2; }
+.cert-line { stroke: var(--apple-green-light); stroke-width: 3; stroke-linecap: round; }
+.cert-label { font-size: 11px; font-weight: 700; fill: var(--apple-green-dark); letter-spacing: 0.1em; text-anchor: middle; font-family: var(--font-system); }
+.trendline { stroke: var(--apple-green-dark); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.trend-dot { fill: var(--apple-green); }
+.trend-bar { fill: var(--apple-green); }
+
+/* ── Merchant Services Slide ── */
+.merchant-device-card {
+  text-align: center;
+  max-width: 320px;
+}
+
+.device-frame {
+  background: linear-gradient(145deg, #2c2c2e 0%, #1d1d1f 100%);
+  border-radius: 36px;
+  padding: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  margin: 0 auto 1.25rem;
+  width: 200px;
+}
+
+.device-screen {
+  background: var(--bg-light);
+  border-radius: 28px;
+  aspect-ratio: 9/19;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+}
+
+.tap-to-pay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nfc-icon {
+  width: 56px;
+  height: 56px;
+  color: var(--apple-green-dark);
+}
+
+.tap-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tap-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--apple-green-dark);
+}
+
+.device-specs {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.spec-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.3em 0.7em;
+  border-radius: 100px;
+  background: var(--bg-light);
+  color: var(--text-secondary);
+}
+
+.device-tagline {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.product-cta {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--apple-green-dark);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 100px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.product-cta:hover {
+  background: var(--apple-green);
+  transform: translateY(-1px);
+}
+
+.slide-action .timeline-step a {
+  color: var(--apple-green-dark);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.slide-action .timeline-step a:hover {
+  text-decoration: underline;
+}
+
+/* ── Timeline / Action Plan ── */
+.timeline {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  max-width: 100%;
+}
+
+.timeline-step {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-light);
+  border-radius: 16px;
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: var(--shadow-soft);
+  border-top: 4px solid var(--apple-green);
+}
+
+.step-number {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--apple-green-dark);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-body p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.timeline-chevron {
+  display: flex;
+  align-items: center;
+  font-size: 2rem;
+  color: var(--apple-green);
+  padding: 0 0.5rem;
+  font-weight: 300;
+}
+
+/* ── Speaker Notes ── */
+.speaker-notes {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  width: min(90vw, 720px);
+  background: rgba(29, 29, 31, 0.94);
+  color: #f5f5f7;
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  z-index: 100;
+  transition: transform 0.35s ease;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.speaker-notes.visible {
+  transform: translateX(-50%) translateY(0);
+}
+
+.speaker-notes strong {
+  color: var(--apple-green);
+}
+
+/* ── Controls ── */
+.controls {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(29, 29, 31, 0.85);
+  backdrop-filter: blur(12px);
+  padding: 8px 16px;
+  border-radius: 100px;
+  z-index: 200;
+}
+
+.controls button {
+  background: transparent;
+  border: none;
+  color: #f5f5f7;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: var(--font-system);
+  transition: background 0.15s;
+}
+
+.controls button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#slide-indicator {
+  color: #a1a1a6;
+  font-size: 0.85rem;
+  min-width: 48px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#notes-toggle.active {
+  background: var(--apple-green-dark);
+  color: #fff;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  :root { --slide-padding: 40px 32px; }
+
+  .split {
+    flex-direction: column !important;
+    gap: 2rem;
+  }
+
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .icon-row {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .timeline {
+    flex-direction: column;
+  }
+
+  .timeline-chevron {
+    transform: rotate(90deg);
+    justify-content: center;
+    padding: 0.25rem 0;
+  }
+
+  .slide-merchant .split {
+    flex-direction: column !important;
+  }
+
+  .progress-rings {
+    gap: 1.5rem;
+  }
+
+  .progress-ring {
+    width: 110px;
+    height: 110px;
+  }
+}
+
+@media print {
+  .controls, .speaker-notes { display: none !important; }
+  .slide {
+    position: relative;
+    opacity: 1 !important;
+    visibility: visible !important;
+    page-break-after: always;
+    height: 100vh;
+  }
+}
