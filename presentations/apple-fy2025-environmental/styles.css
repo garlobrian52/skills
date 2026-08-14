@@ -555,7 +555,6 @@ body {
 .donut {
   width: 100%;
   height: 100%;
-  transform: rotate(-90deg);
 }
 
 .donut-slice {
@@ -935,5 +934,29 @@ body {
     transform: none !important;
     page-break-after: always;
     height: 100vh;
+  }
+
+  .slide .animate-in,
+  .slide:not(.is-active) .animate-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .slide .donut-slice,
+  .slide.is-active .donut-slice {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .slide .ring-fill,
+  .slide.is-active .ring-fill {
+    stroke-dasharray: 100 0 !important;
+  }
+
+  .slide .ring-fill.ring-partial,
+  .slide.is-active .ring-fill.ring-partial {
+    stroke: var(--apple-green) !important;
+    stroke-dasharray: 60 40 !important;
   }
 }
