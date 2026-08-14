@@ -244,6 +244,16 @@ Inspired by [Stripe Workbench Inspector](https://docs.stripe.com/workbench/overv
 
 Pass `--seller <id>` to set the `Stripe-Account` header from your local store when inspecting connected-account objects.
 
+## Presentations
+
+Board decks live under `presentations/` and are **not** part of the npm package (`package.json` `files` lists `dist/`, `skills/`, `commands/`, and `.mcp.json` only).
+
+| Deck | Path |
+|------|------|
+| Apple FY2025 Environmental Progress | [`presentations/apple-fy2025-environmental/`](presentations/apple-fy2025-environmental/README.md) |
+
+The Apple deck is a static HTML slideshow (`index.html` + `styles.css` + `deck.js`) plus a Python `python-pptx` exporter. There is no CLI command, no Node build, and no shared data file between HTML and PPTX — edit both when copy changes. See that directory’s README for controls, regeneration, and pitfalls.
+
 ## License
 
 MIT
