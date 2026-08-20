@@ -51,3 +51,7 @@ Generates `Apple_FY2025_Environmental_Progress.pptx` in this directory.
 ## Audience
 
 Confidential — Board of Directors & Executive Sales Leadership
+
+## Related artifact (sales PPTX)
+
+A separate eight-slide PowerPoint lives at [`deliverables/Apple_FY2025_Environmental_Progress_Business_Sales_Driver.pptx`](../../deliverables/Apple_FY2025_Environmental_Progress_Business_Sales_Driver.pptx). It is **not** produced by `generate_pptx.py` (this script writes `Apple_FY2025_Environmental_Progress.pptx` here and includes a ninth Merchant Services slide). See [`deliverables/README.md`](../../deliverables/README.md).

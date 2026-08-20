@@ -203,6 +203,23 @@ skills/
 └── README.md
 ```
 
+## Presentations and sales decks
+
+Two **independent** Apple FY2025 environmental decks live in this repo. Neither is part of the npm package (`package.json` `files` lists `dist/`, `skills/`, `commands/`, and `.mcp.json` only). There is no CLI command that builds or serves them.
+
+| Artifact | Source of truth | What it is |
+| --- | --- | --- |
+| [`deliverables/Apple_FY2025_Environmental_Progress_Business_Sales_Driver.pptx`](deliverables/Apple_FY2025_Environmental_Progress_Business_Sales_Driver.pptx) | The `.pptx` itself | Eight-slide 16:9 board/sales PPTX with speaker notes and native doughnut charts. Operator guide: [`deliverables/README.md`](deliverables/README.md). |
+| [`presentations/apple-fy2025-environmental/`](presentations/apple-fy2025-environmental/) | `index.html` (+ `styles.css` / `deck.js`) | Nine-slide HTML deck. `generate_pptx.py` writes a **different** PPTX in that folder and does not update `deliverables/`. |
+
+```bash
+# Inspect the sales PPTX (no Office required)
+python3 -c "import zipfile; z=zipfile.ZipFile('deliverables/Apple_FY2025_Environmental_Progress_Business_Sales_Driver.pptx'); print(sum(1 for n in z.namelist() if n.startswith('ppt/slides/slide')), 'slides')"
+
+# View the HTML deck
+cd presentations/apple-fy2025-environmental && python3 -m http.server 8080
+```
+
 ## Stripe Accounts v2 (platform payments)
 
 The CLI also includes Stripe Accounts v2 helpers for onboarding connected sellers, accepting direct charges with an application fee, and charging platform subscriptions from the connected account balance:
