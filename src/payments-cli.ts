@@ -145,60 +145,46 @@ const createPaymentIntentCmd = defineCommand({
   meta: {
     name: "create-payment-intent",
     description:
-      "Create a PaymentIntent with automatic_payment_methods (optionally on a connected account)",
+      "Create a PaymentIntent on the connected account (direct charge + application fee)",
   },
   args: {
+    seller: { type: "string", required: true, description: "Local seller ID" },
     amount: {
       type: "string",
       description: "Amount in minor units (default 2000)",
     },
-    currency: {
-      type: "string",
-      description: "Currency (default STRIPE_CURRENCY/usd)",
-    },
-    seller: {
-      type: "string",
-      description:
-        "Optional local seller ID — creates a direct charge with application fee",
-    },
     applicationFeeAmount: {
       type: "string",
-      description: "Application fee in minor units (default 123; seller required)",
+      description: "Application fee in minor units (default 123)",
     },
+    currency: { type: "string", description: "Currency (default STRIPE_CURRENCY/usd)" },
     json: { type: "boolean", default: false, description: "Print JSON" },
   },
   async run({ args }) {
-    const { payment, paymentIntent, seller, clientSecret } = await createPaymentIntent({
-      amount: args.amount ? Number(args.amount) : undefined,
-      currency: args.currency,
+    const { seller, paymentIntent } = await createPaymentIntent({
       sellerId: args.seller,
+      amount: args.amount ? Number(args.amount) : undefined,
       applicationFeeAmount: args.applicationFeeAmount
         ? Number(args.applicationFeeAmount)
         : undefined,
+      currency: args.currency,
     })
+    if (!seller) {
+      throw new Error("Expected seller result for connected-account PaymentIntent")
+    }
     if (args.json) {
       printJson({
-        payment,
+        seller,
         paymentIntentId: paymentIntent.id,
+        clientSecret: paymentIntent.client_secret,
         status: paymentIntent.status,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency,
-        clientSecret,
         publishableKey: getStripePublishableKey() ?? null,
-        seller: seller ?? null,
       })
       return
     }
-    console.log(`PaymentIntent ${paymentIntent.id}`)
-    console.log(`  payment: ${payment.id}`)
+    console.log(`PaymentIntent ${paymentIntent.id} for seller ${seller.id}`)
     console.log(`  status: ${paymentIntent.status}`)
-    console.log(`  amount: ${paymentIntent.amount} ${paymentIntent.currency}`)
-    if (clientSecret) {
-      console.log(`  clientSecret: ${clientSecret}`)
-    }
-    if (seller) {
-      console.log(`  seller: ${seller.id} (${seller.stripeAccountId})`)
-    }
+    console.log("  clientSecret: hidden (use --json to print)")
   },
 })
 
@@ -418,7 +404,7 @@ const listenWebhooksCmd = defineCommand({
   meta: {
     name: "listen-webhooks",
     description:
-      "Start a local webhook listener for account, checkout, PaymentIntent, and invoice events",
+      "Start a local webhook listener for account, checkout, payment_intent, and invoice events",
   },
   args: {
     port: {
@@ -491,7 +477,7 @@ export default defineCommand({
   meta: {
     name: "payments",
     description:
-      "Stripe Accounts v2: onboard sellers, accept PaymentIntents/Checkout, charge platform subscriptions",
+      "Stripe Accounts v2: onboard sellers, accept embedded payments, charge platform subscriptions",
   },
   subCommands: {
     "create-account": createAccountCmd,
